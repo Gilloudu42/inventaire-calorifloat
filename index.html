@@ -396,6 +396,10 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
       Exporter produit actif
     </button>
+    <button class="btn btn-primary" onclick="partagerSynthese()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+      Envoyer
+    </button>
     <button class="btn btn-outline" onclick="confirmClear()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
       Réinitialiser produit actif
@@ -409,7 +413,7 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;}
   <div id="synth-view-tabs" style="display:none;gap:6px;margin-bottom:10px;align-items:center;flex-wrap:wrap;">
     <span style="font-size:11px;color:var(--gray);font-weight:600;">Vue :</span>
     <button class="synth-view-btn active" onclick="synthSetView('detail')">📋 Détail</button>
-    <button class="synth-view-btn" onclick="synthSetView('cumul')">∑ Cumul famille</button>
+    <button class="synth-view-btn" onclick="synthSetView('cumul')">∑ Cumul type</button>
   </div>
 
   <!-- Contenu dynamique -->
@@ -1376,24 +1380,26 @@ function renderSynthese(){
       </div>`;
 
   } else {
-    // ── Vue CUMUL : une ligne par famille
-    const familles=[...new Set(sorted.map(e=>{
+    // ── Vue CUMUL : une ligne par type (famille sans code RAL/couleur numérique)
+    const getType=f=>(f||'Autre').replace(/\s+\d+$/, '').trim();
+
+    const types=[...new Set(sorted.map(e=>{
       const art=prodArticles.find(a=>a.id===e.articleId)||{};
-      return art.famille||e.famille||'Autre';
+      return getType(art.famille||e.famille||'Autre');
     }))];
 
-    const cumulRows=familles.map(fam=>{
-      const famE=sorted.filter(e=>{
+    const cumulRows=types.map(typ=>{
+      const typE=sorted.filter(e=>{
         const art=prodArticles.find(a=>a.id===e.articleId)||{};
-        return (art.famille||e.famille||'Autre')===fam;
+        return getType(art.famille||e.famille||'Autre')===typ;
       });
-      const famTotal=famE.reduce((s,e)=>s+(e.totalMl||0),0);
-      const nbArt=famE.length;
-      const pct=total>0?Math.round(famTotal/total*100):0;
+      const typTotal=typE.reduce((s,e)=>s+(e.totalMl||0),0);
+      const nbArt=typE.length;
+      const pct=total>0?Math.round(typTotal/total*100):0;
       return `<tr>
-        <td><strong>${fam}</strong></td>
+        <td><strong>${typ}</strong></td>
         <td style="text-align:center;">${nbArt}</td>
-        <td class="ml-col">${famTotal.toLocaleString('fr')} m</td>
+        <td class="ml-col">${typTotal.toLocaleString('fr')} m</td>
         <td style="text-align:right;color:var(--gray);font-size:11px;">${pct}%</td>
       </tr>`;
     }).join('');
@@ -1402,7 +1408,7 @@ function renderSynthese(){
       <div class="card" style="padding:0;overflow:auto;">
         <table class="synth-table">
           <thead><tr>
-            <th>Famille</th>
+            <th>Type</th>
             <th style="text-align:center;">Nb articles</th>
             <th style="text-align:right;">Total (m)</th>
             <th style="text-align:right;">%</th>
@@ -1646,6 +1652,88 @@ function exportExcel(){
     });
   } else {
     dlCsv();
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  PARTAGER SYNTHÈSE (détail ou cumul selon vue active)
+// ──────────────────────────────────────────────────────────────────
+function partagerSynthese(){
+  const prod = synthActiveProd || currentProduct;
+  const prodEntries = loadEntries(prod);
+  if(!prodEntries.length){toast('Aucune donnée à envoyer','err');return;}
+
+  const prodArticles = loadArticles(prod);
+  const sorted = [...prodEntries].sort((a,b)=>a.articleId-b.articleId);
+  const total = sorted.reduce((s,e)=>s+(e.totalMl||0),0);
+  const now = new Date();
+  const date = now.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const hhmm = now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}).replace(':','h');
+  const sep = ';';
+
+  let csvContent, filename;
+
+  if(synthView === 'detail'){
+    // CSV détail : une ligne par saisie
+    const headers = ['Article','Désignation','Containers (m)','Rangées','Paquets','Vrac','Mètres','Date'];
+    const rows = [];
+    sorted.forEach(e=>{
+      (e.saisies||[]).forEach(s=>{
+        rows.push([
+          e.articleId, e.designation,
+          s.mRacks||0, s.nbRangees||0, s.nbPaquets||0, s.nbVrac||0,
+          s.addMl||0,
+          new Date(s.date||e.date).toLocaleString('fr-FR')
+        ]);
+      });
+    });
+    rows.push(['','','','','','','TOTAL',total]);
+    csvContent = [headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(sep)).join('\r\n');
+    filename = `Inventaire_${prod}_detail_${date.replace(/\//g,'-')}_${hhmm}.csv`;
+  } else {
+    // CSV cumul : une ligne par type
+    const getType = f=>(f||'Autre').replace(/\s+\d+$/, '').trim();
+    const types = [...new Set(sorted.map(e=>{
+      const art=prodArticles.find(a=>a.id===e.articleId)||{};
+      return getType(art.famille||e.famille||'Autre');
+    }))];
+    const headers = ['Type','Nb articles','Total (m)','%'];
+    const rows = types.map(typ=>{
+      const typE = sorted.filter(e=>{
+        const art=prodArticles.find(a=>a.id===e.articleId)||{};
+        return getType(art.famille||e.famille||'Autre')===typ;
+      });
+      const typTotal = typE.reduce((s,e)=>s+(e.totalMl||0),0);
+      const pct = total>0?Math.round(typTotal/total*100):0;
+      return [typ, typE.length, typTotal, pct+'%'];
+    });
+    rows.push(['TOTAL','',total,'100%']);
+    csvContent = [headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(sep)).join('\r\n');
+    filename = `Inventaire_${prod}_cumul_${date.replace(/\//g,'-')}_${hhmm}.csv`;
+  }
+
+  const blob = new Blob(['﻿'+csvContent],{type:'text/csv;charset=utf-8'});
+  const file = new File([blob], filename, {type:'text/csv;charset=utf-8'});
+
+  function dl(){
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},300);
+    toast('📊 CSV téléchargé','ok');
+  }
+
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    navigator.share({
+      title:`Inventaire ${prod} — Calorifloat`,
+      text:`Inventaire ${prod} ${synthView==='cumul'?'(cumul)':'(détail)'} du ${date}`,
+      files:[file]
+    })
+    .then(()=>toast('📤 Inventaire partagé','ok'))
+    .catch(e=>{ if(e.name!=='AbortError') dl(); });
+  } else {
+    dl();
   }
 }
 
@@ -2205,92 +2293,4 @@ body{font-family:Arial,sans-serif;margin:5mm;background:#fff;-webkit-print-color
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});
   const file=new File([blob],filename,{type:'text/html'});
   function dl(){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},300);toast('📄 Fichier téléchargé','ok');}
-  if(navigator.canShare&&navigator.canShare({files:[file]})){
-    navigator.share({title:'Kanbans TGI',files:[file]}).then(()=>toast('📤 Kanbans envoyés','ok')).catch(e=>{if(e.name==='AbortError')return;dl();});
-  } else { dl(); }
-}
-
-// ──────────────────────────────────────────────────────────────────
-//  QR SCANNER (nécessite HTTPS ou localhost pour la caméra)
-// ──────────────────────────────────────────────────────────────────
-function openScanner(){
-  if(typeof Html5Qrcode==='undefined'){
-    // Charger la lib à la demande
-    const s=document.createElement('script');
-    s.src='https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
-    s.onload=()=>startScanner();
-    s.onerror=()=>toast('Scanner non disponible (HTTPS requis)','err');
-    document.head.appendChild(s);
-    return;
-  }
-  startScanner();
-}
-
-function startScanner(){
-  document.getElementById('scanner-modal').classList.add('open');
-  document.getElementById('qr-reader').innerHTML='';
-  html5QrCode=new Html5Qrcode('qr-reader');
-  html5QrCode.start(
-    {facingMode:'environment'},
-    {fps:10,qrbox:{width:200,height:200}},
-    (decoded)=>{
-      const id=parseInt(decoded);
-      // Chercher dans le produit actif d'abord
-      if(articles.find(a=>a.id===id)){
-        closeScanner();
-        selectArticle(id);
-        return;
-      }
-      // Chercher dans les autres produits
-      let foundProd=null;
-      for(const prod of Object.keys(PRODUCTS)){
-        if(prod===currentProduct) continue;
-        if(loadArticles(prod).find(a=>a.id===id)){foundProd=prod;break;}
-      }
-      if(foundProd){
-        closeScanner();
-        switchProduct(foundProd);
-        // Petit délai pour laisser le switch s'effectuer
-        setTimeout(()=>selectArticle(id),100);
-      } else {
-        document.getElementById('qr-status').textContent=`Code "${decoded}" non reconnu — réessayez.`;
-      }
-    },
-    ()=>{}
-  ).catch(err=>{
-    document.getElementById('qr-status').textContent='Caméra inaccessible — vérifiez les permissions.';
-  });
-}
-
-function closeScanner(){
-  document.getElementById('scanner-modal').classList.remove('open');
-  if(html5QrCode){html5QrCode.stop().catch(()=>{});html5QrCode=null;}
-}
-
-// ──────────────────────────────────────────────────────────────────
-//  CONFIRM MODAL
-// ──────────────────────────────────────────────────────────────────
-let confirmCallback=null;
-function openConfirm(title,msg,cb){
-  document.getElementById('confirm-title').textContent=title;
-  document.getElementById('confirm-msg').textContent=msg;
-  confirmCallback=cb;
-  document.getElementById('confirm-modal').classList.add('open');
-}
-function closeConfirm(){document.getElementById('confirm-modal').classList.remove('open');confirmCallback=null;}
-document.getElementById('confirm-ok-btn').onclick=()=>{if(confirmCallback)confirmCallback();closeConfirm();};
-
-// ──────────────────────────────────────────────────────────────────
-//  TOAST
-// ──────────────────────────────────────────────────────────────────
-let toastTimer=null;
-function toast(msg,type=''){
-  const el=document.getElementById('toast');
-  el.textContent=msg;
-  el.className='show '+(type==='ok'?'ok':type==='err'?'err':'');
-  clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>{el.className='';},2800);
-}
-</script>
-</body>
-</html>
+ 
