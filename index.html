@@ -2293,4 +2293,77 @@ body{font-family:Arial,sans-serif;margin:5mm;background:#fff;-webkit-print-color
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});
   const file=new File([blob],filename,{type:'text/html'});
   function dl(){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},300);toast('📄 Fichier téléchargé','ok');}
- 
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    navigator.share({title:'Kanbans TGI',files:[file]}).then(()=>toast('📤 Kanbans envoyés','ok')).catch(e=>{if(e.name==='AbortError')return;dl();});
+  } else { dl(); }
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  QR SCANNER (nécessite HTTPS ou localhost pour la caméra)
+// ──────────────────────────────────────────────────────────────────
+function openScanner(){
+  if(typeof Html5Qrcode==='undefined'){
+    const s=document.createElement('script');
+    s.src='https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+    s.onload=()=>startScanner();
+    s.onerror=()=>toast('Scanner non disponible (HTTPS requis)','err');
+    document.head.appendChild(s);
+    return;
+  }
+  startScanner();
+}
+
+function startScanner(){
+  document.getElementById('scanner-modal').classList.add('open');
+  document.getElementById('qr-reader').innerHTML='';
+  html5QrCode=new Html5Qrcode('qr-reader');
+  html5QrCode.start(
+    {facingMode:'environment'},
+    {fps:10,qrbox:{width:200,height:200}},
+    (decoded)=>{
+      const id=parseInt(decoded);
+      if(articles.find(a=>a.id===id)){closeScanner();selectArticle(id);return;}
+      let foundProd=null;
+      for(const prod of Object.keys(PRODUCTS)){
+        if(prod===currentProduct) continue;
+        if(loadArticles(prod).find(a=>a.id===id)){foundProd=prod;break;}
+      }
+      if(foundProd){closeScanner();switchProduct(foundProd);setTimeout(()=>selectArticle(id),100);}
+      else{document.getElementById('qr-status').textContent=`Code "${decoded}" non reconnu — réessayez.`;}
+    },
+    ()=>{}
+  ).catch(()=>{document.getElementById('qr-status').textContent='Caméra inaccessible — vérifiez les permissions.';});
+}
+
+function closeScanner(){
+  document.getElementById('scanner-modal').classList.remove('open');
+  if(html5QrCode){html5QrCode.stop().catch(()=>{});html5QrCode=null;}
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  CONFIRM MODAL
+// ──────────────────────────────────────────────────────────────────
+let confirmCallback=null;
+function openConfirm(title,msg,cb){
+  document.getElementById('confirm-title').textContent=title;
+  document.getElementById('confirm-msg').textContent=msg;
+  confirmCallback=cb;
+  document.getElementById('confirm-modal').classList.add('open');
+}
+function closeConfirm(){document.getElementById('confirm-modal').classList.remove('open');confirmCallback=null;}
+document.getElementById('confirm-ok-btn').onclick=()=>{if(confirmCallback)confirmCallback();closeConfirm();};
+
+// ──────────────────────────────────────────────────────────────────
+//  TOAST
+// ──────────────────────────────────────────────────────────────────
+let toastTimer=null;
+function toast(msg,type=''){
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.className='show '+(type==='ok'?'ok':type==='err'?'err':'');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{el.className='';},2800);
+}
+</script>
+</body>
+</html>
