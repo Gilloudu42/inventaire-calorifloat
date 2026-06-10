@@ -413,7 +413,7 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;}
   <div id="synth-view-tabs" style="display:none;gap:6px;margin-bottom:10px;align-items:center;flex-wrap:wrap;">
     <span style="font-size:11px;color:var(--gray);font-weight:600;">Vue :</span>
     <button class="synth-view-btn active" onclick="synthSetView('detail')">📋 Détail</button>
-    <button class="synth-view-btn" onclick="synthSetView('cumul')">∑ Cumul type</button>
+    <button class="synth-view-btn" onclick="synthSetView('cumul')">∑ Cumul article</button>
   </div>
 
   <!-- Contenu dynamique -->
@@ -1380,26 +1380,20 @@ function renderSynthese(){
       </div>`;
 
   } else {
-    // ── Vue CUMUL : une ligne par type (famille sans code RAL/couleur numérique)
-    const getType=f=>(f||'Autre').replace(/\s+\d+$/, '').trim();
+    // ── Vue CUMUL : une ligne par article (total toutes saisies confondues)
+    const badgeMap2={gris:'gris',noir:'noir',blanc:'blanc',drome:'drome',marron:'marron',
+      sw_9023:'gris',sw_noir:'noir',sw_7035:'gris',sw_eq_b:'noir',sw_eq_nb:'gris',
+      alu_nat:'gris',alu_noir:'noir',alu_blanc:'blanc',alu_dore:'gris'};
 
-    const types=[...new Set(sorted.map(e=>{
+    const cumulRows=sorted.map(e=>{
       const art=prodArticles.find(a=>a.id===e.articleId)||{};
-      return getType(art.famille||e.famille||'Autre');
-    }))];
-
-    const cumulRows=types.map(typ=>{
-      const typE=sorted.filter(e=>{
-        const art=prodArticles.find(a=>a.id===e.articleId)||{};
-        return getType(art.famille||e.famille||'Autre')===typ;
-      });
-      const typTotal=typE.reduce((s,e)=>s+(e.totalMl||0),0);
-      const nbArt=typE.length;
-      const pct=total>0?Math.round(typTotal/total*100):0;
+      const bc=badgeMap2[art.couleur]||'gris';
+      const pct=total>0?Math.round((e.totalMl||0)/total*100):0;
       return `<tr>
-        <td><strong>${typ}</strong></td>
-        <td style="text-align:center;">${nbArt}</td>
-        <td class="ml-col">${typTotal.toLocaleString('fr')} m</td>
+        <td><span class="badge badge-${bc}">${e.articleId}</span></td>
+        <td>${e.designation}</td>
+        <td style="color:var(--gray);font-size:11px;">${art.famille||''}</td>
+        <td class="ml-col">${(e.totalMl||0).toLocaleString('fr')} m</td>
         <td style="text-align:right;color:var(--gray);font-size:11px;">${pct}%</td>
       </tr>`;
     }).join('');
@@ -1408,14 +1402,15 @@ function renderSynthese(){
       <div class="card" style="padding:0;overflow:auto;">
         <table class="synth-table">
           <thead><tr>
-            <th>Type</th>
-            <th style="text-align:center;">Nb articles</th>
+            <th>Article</th>
+            <th>Désignation</th>
+            <th>Famille</th>
             <th style="text-align:right;">Total (m)</th>
             <th style="text-align:right;">%</th>
           </tr></thead>
           <tbody>${cumulRows}</tbody>
           <tfoot><tr class="total-row">
-            <td colspan="2"><strong>TOTAL ${synthActiveProd}</strong></td>
+            <td colspan="3"><strong>TOTAL ${synthActiveProd}</strong></td>
             <td class="ml-col">${total.toLocaleString('fr')} m</td>
             <td></td>
           </tr></tfoot>
