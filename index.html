@@ -1715,24 +1715,37 @@ function partagerSynthese(){
   const blob = new Blob(['﻿'+csvContent],{type:'text/csv;charset=utf-8'});
   const file = new File([blob], filename, {type:'text/csv;charset=utf-8'});
 
+  // Texte lisible pour le corps de mail (fallback si partage fichier non supporté)
+  const textBody = csvContent.replace(/"/g,'').replace(/;/g,'\t');
+  const shareTitle = `Inventaire ${prod} ${synthView==='cumul'?'(cumul)':'(détail)'} — Calorifloat`;
+  const shareText = `${shareTitle}\nDate : ${date}\n\n${textBody}`;
+
   function dl(){
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
     a.href=url; a.download=filename;
     document.body.appendChild(a); a.click();
     setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},300);
-    toast('📊 CSV téléchargé','ok');
+    toast('CSV téléchargé','ok');
   }
 
-  if(navigator.canShare&&navigator.canShare({files:[file]})){
-    navigator.share({
-      title:`Inventaire ${prod} — Calorifloat`,
-      text:`Inventaire ${prod} ${synthView==='cumul'?'(cumul)':'(détail)'} du ${date}`,
-      files:[file]
-    })
-    .then(()=>toast('📤 Inventaire partagé','ok'))
-    .catch(e=>{ if(e.name!=='AbortError') dl(); });
+  function shareAsText(){
+    // Ouvre le sélecteur d'apps natif (Gmail, WhatsApp…) avec le contenu en texte
+    navigator.share({title: shareTitle, text: shareText})
+      .then(()=>toast('Inventaire partagé','ok'))
+      .catch(e=>{ if(e.name!=='AbortError') dl(); });
+  }
+
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    // Partage avec fichier CSV joint (Android Chrome récent)
+    navigator.share({title: shareTitle, text:`Inventaire ${prod} du ${date}`, files:[file]})
+      .then(()=>toast('Inventaire partagé','ok'))
+      .catch(e=>{ if(e.name!=='AbortError') shareAsText(); });
+  } else if(navigator.share){
+    // Partage texte — ouvre Gmail / WhatsApp / etc.
+    shareAsText();
   } else {
+    // PC ou navigateur sans Web Share API
     dl();
   }
 }
@@ -2351,19 +2364,4 @@ function openConfirm(title,msg,cb){
   document.getElementById('confirm-modal').classList.add('open');
 }
 function closeConfirm(){document.getElementById('confirm-modal').classList.remove('open');confirmCallback=null;}
-document.getElementById('confirm-ok-btn').onclick=()=>{if(confirmCallback)confirmCallback();closeConfirm();};
-
-// ──────────────────────────────────────────────────────────────────
-//  TOAST
-// ──────────────────────────────────────────────────────────────────
-let toastTimer=null;
-function toast(msg,type=''){
-  const el=document.getElementById('toast');
-  el.textContent=msg;
-  el.className='show '+(type==='ok'?'ok':type==='err'?'err':'');
-  clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>{el.className='';},2800);
-}
-</script>
-</body>
-</html>
+document.getElementById('confirm-ok-btn').onclick=()=>{if(confirmCallback)confirmCallback()
