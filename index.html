@@ -1,0 +1,2296 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Inventaire Stock — Calorifloat</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- QR inline — zéro CDN requis -->
+<style>
+/* ═══════════════════════════════════════════════════════════════ RESET & BASE */
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+:root{
+  --blue:#1a3c6e; --blue2:#24529b; --blue3:#e8eef7;
+  --green:#198754; --green2:#d4edda;
+  --red:#dc3545;   --red2:#f8d7da;
+  --orange:#fd7e14; --orange2:#fff3cd;
+  --gray:#6c757d;  --gray2:#f5f7fa; --gray3:#dee2e6;
+  --white:#fff;
+  --radius:10px; --shadow:0 2px 8px rgba(0,0,0,.10);
+  --font:'Segoe UI',Arial,sans-serif;
+}
+html,body{height:100%;font-family:var(--font);background:var(--gray2);color:#212529;font-size:15px;}
+body{display:flex;flex-direction:column;max-width:700px;margin:0 auto;}
+
+/* ═══════════════════════════════════════════════════════════════ HEADER */
+header{background:var(--blue);color:var(--white);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+header h1{font-size:17px;font-weight:700;letter-spacing:.3px;}
+#header-date{font-size:12px;opacity:.8;}
+
+/* ═══════════════════════════════════════════════════════════════ PRODUCT SWITCHER */
+#product-switcher{display:flex;align-items:center;background:var(--blue);padding:6px 16px 8px;gap:8px;border-bottom:1px solid rgba(255,255,255,.15);flex-shrink:0;}
+#product-switcher span{font-size:11px;color:rgba(255,255,255,.6);font-weight:600;margin-right:4px;}
+.prod-btn{padding:4px 16px;border-radius:20px;border:1.5px solid rgba(255,255,255,.5);background:transparent;color:rgba(255,255,255,.7);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;letter-spacing:.3px;}
+.prod-btn.active{background:var(--white);color:var(--blue);border-color:var(--white);}
+.prod-btn:hover:not(.active){background:rgba(255,255,255,.15);}
+
+/* ═══════════════════════════════════════════════════════════════ TABS */
+nav{display:flex;background:var(--white);border-bottom:2px solid var(--gray3);flex-shrink:0;}
+nav button{flex:1;padding:11px 4px 9px;border:none;background:none;cursor:pointer;font-size:11px;color:var(--gray);display:flex;flex-direction:column;align-items:center;gap:3px;transition:color .2s;}
+nav button svg{width:20px;height:20px;}
+nav button.active{color:var(--blue);border-bottom:3px solid var(--blue);margin-bottom:-2px;}
+nav button:hover{background:var(--gray2);}
+
+/* ═══════════════════════════════════════════════════════════════ CONTENT */
+main{flex:1;overflow-y:auto;padding:14px;}
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+
+/* ═══════════════════════════════════════════════════════════════ CARDS */
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:12px;}
+.card-title{font-size:13px;font-weight:700;color:var(--blue);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.card-title svg{width:16px;height:16px;}
+
+/* ═══════════════════════════════════════════════════════════════ FORMS */
+label{display:block;font-size:12px;color:var(--gray);margin-bottom:4px;font-weight:600;}
+input,select{width:100%;padding:10px 12px;border:1.5px solid var(--gray3);border-radius:8px;font-size:15px;background:var(--white);color:#212529;outline:none;transition:border-color .2s;}
+input:focus,select:focus{border-color:var(--blue);}
+input[type=number]{-moz-appearance:textfield;}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+.form-row.triple{grid-template-columns:1fr 1fr 1fr;}
+.form-group{margin-bottom:10px;}
+.hint{font-size:11px;color:var(--gray);margin-top:3px;}
+
+/* ═══════════════════════════════════════════════════════════════ BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 18px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:all .15s;}
+.btn-primary{background:var(--blue);color:var(--white);}
+.btn-primary:hover{background:var(--blue2);}
+.btn-success{background:var(--green);color:var(--white);}
+.btn-success:hover{background:#157347;}
+.btn-danger{background:var(--red);color:var(--white);}
+.btn-outline{background:var(--white);color:var(--blue);border:1.5px solid var(--blue);}
+.btn-outline:hover{background:var(--blue3);}
+.btn-sm{padding:6px 12px;font-size:12px;}
+.btn-icon{padding:8px;border-radius:8px;background:var(--blue3);color:var(--blue);border:none;cursor:pointer;}
+.btn-full{width:100%;}
+.btn svg{width:16px;height:16px;flex-shrink:0;}
+
+/* ═══════════════════════════════════════════════════════════════ ARTICLE SELECTOR */
+#article-search-wrap{position:relative;}
+#article-dropdown{position:absolute;top:100%;left:0;right:0;background:var(--white);border:1.5px solid var(--blue);border-top:none;border-radius:0 0 8px 8px;z-index:100;max-height:240px;overflow-y:auto;display:none;box-shadow:var(--shadow);}
+#article-dropdown .opt{padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--gray3);font-size:14px;}
+#article-dropdown .opt:hover{background:var(--blue3);}
+#article-dropdown .opt .opt-id{font-weight:700;color:var(--blue);}
+#article-dropdown .opt .opt-sub{font-size:11px;color:var(--gray);}
+
+/* ═══════════════════════════════════════════════════════════════ ARTICLE INFO BANNER */
+#article-info{display:none;background:var(--blue3);border-radius:8px;padding:10px 14px;margin-bottom:12px;}
+#article-info .ai-id{font-size:20px;font-weight:800;color:var(--blue);}
+#article-info .ai-name{font-size:13px;color:#444;}
+#article-info .ai-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+.tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;}
+.tag-blue{background:var(--blue);color:var(--white);}
+.tag-gray{background:var(--gray3);color:#444;}
+
+/* ═══════════════════════════════════════════════════════════════ RESULT BOX */
+#result-box{display:none;background:linear-gradient(135deg,var(--blue),var(--blue2));border-radius:var(--radius);padding:16px;margin-bottom:12px;color:var(--white);text-align:center;}
+#result-box .res-label{font-size:12px;opacity:.8;margin-bottom:4px;}
+#result-box .res-ml{font-size:36px;font-weight:800;letter-spacing:-1px;}
+#result-box .res-unit{font-size:14px;opacity:.8;}
+#result-box .res-detail{font-size:11px;opacity:.7;margin-top:6px;}
+
+/* ═══════════════════════════════════════════════════════════════ SYNTHESE TABLE */
+.synth-tab-btn{padding:5px 14px;border-radius:20px;border:1.5px solid var(--gray3);background:var(--white);color:var(--gray);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;}
+.synth-tab-btn.active{background:var(--blue);color:var(--white);border-color:var(--blue);}
+.synth-tab-btn .badge-count{display:inline-block;background:var(--green);color:#fff;border-radius:10px;font-size:10px;padding:0 5px;margin-left:4px;}
+.synth-tab-btn.active .badge-count{background:rgba(255,255,255,.3);}
+.synth-view-btn{padding:4px 13px;border-radius:20px;border:1.5px solid var(--blue2);background:var(--white);color:var(--blue2);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;}
+.synth-view-btn.active{background:var(--blue2);color:var(--white);border-color:var(--blue2);}
+.synth-table{width:100%;border-collapse:collapse;font-size:12px;}
+.synth-table th{background:var(--blue);color:var(--white);padding:8px 6px;text-align:left;font-weight:600;}
+.synth-table td{padding:7px 6px;border-bottom:1px solid var(--gray3);}
+.synth-table tr:hover td{background:var(--gray2);}
+.synth-table .total-row td{font-weight:700;background:var(--blue3);color:var(--blue);}
+.synth-table .ml-col{text-align:right;font-weight:700;color:var(--blue);}
+.synth-table .del-btn{padding:3px 6px;background:var(--red2);border:none;border-radius:4px;cursor:pointer;color:var(--red);font-size:11px;}
+.badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700;}
+.badge-gris{background:#e0e0e0;color:#555;}
+.badge-noir{background:#333;color:#fff;}
+.badge-blanc{background:#f0f0f0;border:1px solid #ccc;color:#555;}
+.badge-drome{background:#b8d4b8;color:#2d5a2d;}
+.badge-marron{background:#c8a882;color:#5a3010;}
+
+/* ═══════════════════════════════════════════════════════════════ PARAMETRES */
+.art-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--gray3);}
+.art-row:last-child{border-bottom:none;}
+.art-id{font-weight:700;color:var(--blue);font-size:14px;min-width:60px;}
+.art-name{font-size:12px;color:var(--gray);}
+.art-params{font-size:11px;color:#555;margin-top:2px;}
+
+/* ═══════════════════════════════════════════════════════════════ MODAL */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:16px;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--white);border-radius:var(--radius);padding:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;}
+.modal h3{color:var(--blue);margin-bottom:14px;font-size:16px;}
+.modal-footer{display:flex;gap:8px;margin-top:16px;justify-content:flex-end;}
+
+/* ═══════════════════════════════════════════════════════════════ ETIQUETTES */
+.etiq-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+@media(min-width:500px){.etiq-grid{grid-template-columns:repeat(4,1fr);}}
+.etiq-card{background:var(--white);border:1.5px solid var(--gray3);border-radius:8px;padding:8px;text-align:center;break-inside:avoid;}
+.etiq-card .etiq-id{font-size:12px;font-weight:800;color:var(--blue);margin-top:5px;}
+.etiq-card .etiq-name{font-size:10px;color:var(--gray);margin-top:2px;line-height:1.3;}
+.etiq-card img{display:block;margin:0 auto;border-radius:4px;}
+.etiq-card .etiq-fallback{width:80px;height:80px;background:var(--blue3);border-radius:4px;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--blue);font-weight:800;}
+
+/* ═══════════════════════════════════════════════════════════════ QR SCANNER */
+#scanner-modal .modal{max-width:360px;}
+#qr-reader{width:100%;border-radius:8px;overflow:hidden;min-height:250px;}
+#qr-status{font-size:12px;color:var(--gray);text-align:center;padding:6px;}
+
+/* ═══════════════════════════════════════════════════════════════ TOASTS */
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:#333;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+#toast.ok{background:var(--green);}
+#toast.err{background:var(--red);}
+
+/* ═══════════════════════════════════════════════════════════════ EMPTY STATE */
+.empty{text-align:center;padding:40px 20px;color:var(--gray);}
+.empty svg{width:48px;height:48px;opacity:.4;margin-bottom:10px;}
+
+/* ═══════════════════════════════════════════════════════════════ KANBAN */
+.kanban-list{display:flex;flex-direction:column;gap:5px;}
+.kanban-card{
+  display:flex;align-items:stretch;
+  height:90px;border:1.5px solid #888;border-radius:3px;
+  break-inside:avoid;overflow:hidden;
+  -webkit-print-color-adjust:exact!important;
+  print-color-adjust:exact!important;
+}
+.kanban-main{
+  background:#FFE600;
+  -webkit-print-color-adjust:exact!important;
+  print-color-adjust:exact!important;
+  flex:1;display:flex;align-items:center;
+  padding:6px 10px;gap:8px;
+  border-right:2.5px solid #444;
+}
+.kanban-text-zone{flex:1;min-width:0;}
+.kanban-line1{font-size:24px;font-weight:900;color:#000;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.kanban-line2{font-size:13px;font-weight:700;color:#333;margin-top:4px;}
+.kanban-qr-zone{
+  background:#fff;width:96px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;padding:4px;
+  border-right:2px solid #444;
+  -webkit-print-color-adjust:exact!important;
+  print-color-adjust:exact!important;
+}
+.kanban-qr-img{width:88px;height:88px;display:block;}
+.kanban-color-strip{
+  width:90px;flex-shrink:0;
+  -webkit-print-color-adjust:exact!important;
+  print-color-adjust:exact!important;
+}
+
+/* ═══════════════════════════════════════════════════════════════ PRINT */
+@media print{
+  /* Libérer hauteur/overflow pour multi-pages */
+  html,body{height:auto!important;overflow:visible!important;}
+  body{background:white;max-width:none;display:block!important;}
+  main{overflow:visible!important;height:auto!important;padding:4mm;}
+  #product-switcher,header,nav,#toast,.btn,.etiq-controls,.etiq-print-bar,.kanban-controls,.kanban-print-bar,.modal-bg,#synth-prod-tabs{display:none!important;}
+  .tab-content{display:none!important;}
+  #tab-etiquettes.active{display:block!important;}
+  #tab-kanban.active{display:block!important;}
+  /* étiquettes — 4 par ligne, saut de page propre */
+  .etiq-grid{grid-template-columns:repeat(4,1fr)!important;gap:3mm;display:grid!important;}
+  .etiq-card{border:1px solid #aaa;border-radius:4px;padding:4px;break-inside:avoid;page-break-inside:avoid;}
+  .etiq-card img{width:72px;height:72px;}
+  .etiq-card .etiq-id{font-size:11px;}
+  .etiq-card .etiq-name{font-size:9px;}
+  /* kanban */
+  .kanban-card{width:180mm!important;height:28mm!important;}
+  .kanban-main{padding:2mm 3mm;gap:2mm;border-right:none;}
+  .kanban-line1{font-size:28pt!important;}
+  .kanban-line2{font-size:9pt!important;margin-top:1mm;}
+  .kanban-qr-zone{width:28mm!important;padding:1mm!important;border-right:1.5px solid #444;}
+  .kanban-qr-img{width:24mm!important;height:24mm!important;}
+  .kanban-color-strip{width:30mm!important;}
+  .card{box-shadow:none!important;}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ HEADER -->
+<header>
+  <h1>📦 Inventaire Stock — <span id="product-label">TGI</span></h1>
+  <span id="header-date"></span>
+</header>
+
+<!-- ═══════════════════ PRODUCT SWITCHER -->
+<div id="product-switcher">
+  <span>Produit :</span>
+  <button class="prod-btn active" data-prod="TGI" onclick="switchProduct('TGI')">TGI</button>
+  <button class="prod-btn" data-prod="SW" onclick="switchProduct('SW')">SW</button>
+  <button class="prod-btn" data-prod="ALU" onclick="switchProduct('ALU')">ALU</button>
+</div>
+
+<!-- ═══════════════════ NAVIGATION -->
+<nav>
+  <button class="active" onclick="showTab('saisie',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    Saisie
+  </button>
+  <button onclick="showTab('synthese',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+    Synthèse
+  </button>
+  <button onclick="showTab('params',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    Paramètres
+  </button>
+  <button onclick="showTab('etiquettes',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+    Étiquettes
+  </button>
+  <button onclick="showTab('kanban',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="4" rx="1"/><rect x="2" y="13" width="20" height="4" rx="1"/></svg>
+    Kanban
+  </button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     TAB 1 — SAISIE
+════════════════════════════════════════════════════════════════════════════ -->
+<main>
+<div id="tab-saisie" class="tab-content active">
+
+  <!-- Article selector -->
+  <div class="card">
+    <div class="card-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      Sélectionner un article
+    </div>
+    <div style="display:flex;gap:8px;">
+      <div id="article-search-wrap" style="flex:1;">
+        <input type="text" id="article-search" placeholder="N° article ou désignation…" autocomplete="off" oninput="filterArticles()" onfocus="showDropdown()">
+        <div id="article-dropdown"></div>
+      </div>
+      <button class="btn-icon" onclick="openScanner()" title="Scanner QR">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9V5a2 2 0 012-2h4M15 3h4a2 2 0 012 2v4M21 15v4a2 2 0 01-2 2h-4M9 21H5a2 2 0 01-2-2v-4"/><rect x="7" y="7" width="4" height="4"/><rect x="13" y="13" width="4" height="4"/><line x1="13" y1="7" x2="17" y2="7"/><line x1="13" y1="10" x2="17" y2="10"/><line x1="7" y1="13" x2="7" y2="17"/><line x1="10" y1="13" x2="10" y2="17"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Article info -->
+  <div id="article-info">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div>
+        <div class="ai-id" id="ai-id">—</div>
+        <div class="ai-name" id="ai-name">—</div>
+      </div>
+      <button onclick="clearArticle()" style="background:none;border:none;cursor:pointer;color:var(--gray);font-size:18px;">✕</button>
+    </div>
+    <div class="ai-tags" id="ai-tags"></div>
+    <!-- Cumul existant -->
+    <div id="cumul-info" style="display:none;margin-top:8px;padding:7px 10px;background:rgba(255,255,255,.6);border-radius:6px;font-size:12px;">
+      <span style="color:var(--gray);">Déjà saisi :</span>
+      <strong id="cumul-ml" style="color:var(--blue);margin-left:4px;"></strong>
+      <span style="color:var(--gray);margin-left:2px;">m</span>
+      <button onclick="resetOneArticle()" style="margin-left:10px;background:var(--red2);border:none;border-radius:4px;padding:2px 7px;font-size:11px;color:var(--red);cursor:pointer;">Remettre à 0</button>
+    </div>
+  </div>
+
+  <!-- Saisie quantités -->
+  <div class="card" id="qty-card" style="display:none;">
+    <div class="card-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Quantités
+    </div>
+
+    <!-- Container complet -->
+    <div style="font-size:11px;font-weight:700;color:var(--blue);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px;">Container complet (étiquette)</div>
+    <div class="form-row">
+      <div class="form-group" style="margin:0;">
+        <label>Mètres du container <span style="font-weight:400;color:var(--gray)">(étiquette)</span></label>
+        <div style="display:flex;gap:6px;align-items:stretch;">
+          <input type="number" id="m-par-rack" min="0" value="0" oninput="saveRackMetres();calcTotal()" style="flex:1;">
+          <button type="button" id="ocr-btn" onclick="document.getElementById('ocr-file').click()" title="Lire l'étiquette en photo"
+            style="flex:0 0 auto;background:var(--blue);border:none;border-radius:6px;padding:0 12px;color:#fff;cursor:pointer;display:flex;align-items:center;gap:5px;font-size:13px;font-weight:600;">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            Photo
+          </button>
+          <input type="file" id="ocr-file" accept="image/*" capture="environment" style="display:none;" onchange="readLabelPhoto(event)">
+        </div>
+        <div class="hint">Saisie manuelle ou lecture photo de l'étiquette</div>
+        <div id="ocr-panel" style="display:none;margin-top:6px;padding:8px;background:#f3f7ff;border:1px solid #cfe0ff;border-radius:6px;font-size:12px;">
+          <div id="ocr-status" style="color:var(--blue2);font-weight:600;margin-bottom:6px;"></div>
+          <div id="ocr-chips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          <div id="ocr-raw" style="display:none;margin-top:6px;color:var(--gray);font-size:11px;white-space:pre-wrap;word-break:break-word;"></div>
+        </div>
+      </div>
+    </div>
+    <div id="rack-subtotal" style="font-size:12px;color:var(--blue2);margin-bottom:10px;min-height:16px;"></div>
+
+    <!-- Rack entamé / vrac -->
+    <div style="font-size:11px;font-weight:700;color:var(--blue);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px;">Rack entamé / vrac</div>
+    <div class="form-row">
+      <div class="form-group" style="margin:0;">
+        <label>Rangées</label>
+        <input type="number" id="nb-rangees" min="0" value="0" oninput="calcTotal()">
+        <div class="hint">× <span id="hint-bpr">—</span> barres/rangée</div>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label>Paquets</label>
+        <input type="number" id="nb-paquets" min="0" value="0" oninput="calcTotal()">
+        <div class="hint">× <span id="hint-bpp">—</span> barres/paquet</div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="margin:0;">
+        <label>Barres vrac</label>
+        <input type="number" id="nb-vrac" min="0" value="0" oninput="calcTotal()">
+        <div class="hint">× 6 m/barre</div>
+      </div>
+      <div class="form-group" style="margin:0;"></div>
+    </div>
+  </div>
+
+  <!-- Résultat -->
+  <div id="result-box">
+    <div class="res-label">TOTAL CALCULÉ</div>
+    <div><span class="res-ml" id="res-ml">0</span> <span class="res-unit">m</span></div>
+    <div class="res-detail" id="res-detail"></div>
+  </div>
+
+  <!-- Bouton enregistrer -->
+  <button class="btn btn-success btn-full" id="save-btn" style="display:none;" onclick="saveEntry()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+    Enregistrer
+  </button>
+
+  <!-- Dernières saisies -->
+  <div id="recent-card" class="card" style="margin-top:14px;">
+    <div class="card-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Dernières saisies
+    </div>
+    <div id="recent-list"></div>
+  </div>
+
+</div><!-- end tab-saisie -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     TAB 2 — SYNTHÈSE
+════════════════════════════════════════════════════════════════════════════ -->
+<div id="tab-synthese" class="tab-content">
+
+  <!-- Actions -->
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+    <button class="btn btn-success" onclick="exportExcel()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+      Exporter produit actif
+    </button>
+    <button class="btn btn-outline" onclick="confirmClear()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+      Réinitialiser produit actif
+    </button>
+  </div>
+
+  <!-- Sous-onglets produits -->
+  <div id="synth-prod-tabs" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;"></div>
+
+  <!-- Toggle vue Détail / Cumul -->
+  <div id="synth-view-tabs" style="display:none;gap:6px;margin-bottom:10px;align-items:center;flex-wrap:wrap;">
+    <span style="font-size:11px;color:var(--gray);font-weight:600;">Vue :</span>
+    <button class="synth-view-btn active" onclick="synthSetView('detail')">📋 Détail</button>
+    <button class="synth-view-btn" onclick="synthSetView('cumul')">∑ Cumul famille</button>
+  </div>
+
+  <!-- Contenu dynamique -->
+  <div id="synth-content"></div>
+
+  <div id="synth-empty" class="empty">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+    <div>Aucune saisie enregistrée.</div>
+    <div style="font-size:12px;margin-top:4px;">Utilisez l'onglet Saisie pour commencer.</div>
+  </div>
+
+</div><!-- end tab-synthese -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     TAB 3 — PARAMÈTRES
+════════════════════════════════════════════════════════════════════════════ -->
+<div id="tab-params" class="tab-content">
+
+  <div class="card" style="margin-bottom:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span style="font-size:13px;color:var(--gray);">Articles TGI — édition des paramètres</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm btn-primary" onclick="openEditModal(null)">+ Ajouter</button>
+        <button class="btn btn-sm btn-outline" onclick="resetArticles()">⟳ Réinitialiser</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="params-list"></div>
+
+</div><!-- end tab-params -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     TAB 4 — ÉTIQUETTES QR
+════════════════════════════════════════════════════════════════════════════ -->
+<div id="tab-etiquettes" class="tab-content">
+
+  <!-- Contrôles -->
+  <div class="card etiq-controls" style="margin-bottom:12px;">
+    <div class="card-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+      Générer des étiquettes
+    </div>
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group" style="margin:0;grid-column:1/3;">
+        <label>Article</label>
+        <select id="etiq-article-select">
+          <option value="">— Sélectionner un article —</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row" style="margin-top:10px;align-items:flex-end;">
+      <div class="form-group" style="margin:0;">
+        <label>Nombre d'étiquettes</label>
+        <input type="number" id="etiq-count" min="1" max="100" value="4">
+        <div class="hint">max 100</div>
+      </div>
+      <div style="display:flex;align-items:flex-end;padding-bottom:0;">
+        <button class="btn btn-primary btn-full" onclick="generateEtiq()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>
+          Générer
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bouton imprimer + info -->
+  <div id="etiq-print-bar" style="display:none;margin-bottom:12px;" class="etiq-controls">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button class="btn btn-primary" onclick="window.print()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Imprimer
+      </button>
+      <button class="btn btn-success" onclick="partagerEtiquettes()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+        Envoyer
+      </button>
+      <button class="btn btn-outline" onclick="clearEtiq()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+        Tout effacer
+      </button>
+      <span id="etiq-info-bar" style="font-size:13px;color:var(--gray);"></span>
+    </div>
+  </div>
+
+  <!-- Grille d'étiquettes -->
+  <div class="etiq-grid" id="etiq-grid"></div>
+
+  <!-- État vide -->
+  <div id="etiq-empty" class="empty">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+    <div>Sélectionnez un article et cliquez sur Générer.</div>
+  </div>
+
+</div><!-- end tab-etiquettes -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     TAB 5 — KANBAN
+════════════════════════════════════════════════════════════════════════════ -->
+<div id="tab-kanban" class="tab-content">
+
+  <!-- Contrôles -->
+  <div class="card kanban-controls" style="margin-bottom:12px;">
+    <div class="card-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="4" rx="1"/><rect x="2" y="13" width="20" height="4" rx="1"/></svg>
+      Générer des kanbans
+    </div>
+    <div class="form-group">
+      <label>Article</label>
+      <select id="kanban-article-select">
+        <option value="">— Sélectionner un article —</option>
+      </select>
+    </div>
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group" style="margin:0;">
+        <label>Nombre de kanbans</label>
+        <input type="number" id="kanban-count" min="1" max="50" value="1">
+        <div class="hint">max 50</div>
+      </div>
+      <div style="display:flex;align-items:flex-end;">
+        <button class="btn btn-primary btn-full" onclick="generateKanban()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>
+          Générer
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barre impression -->
+  <div id="kanban-print-bar" style="display:none;margin-bottom:12px;" class="kanban-controls">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button class="btn btn-primary" onclick="window.print()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Imprimer
+      </button>
+      <button class="btn btn-success" onclick="partagerKanban()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+        Envoyer
+      </button>
+      <button class="btn btn-outline" onclick="clearKanban()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+        Tout effacer
+      </button>
+      <span id="kanban-info-bar" style="font-size:13px;color:var(--gray);"></span>
+    </div>
+  </div>
+
+  <!-- Liste kanbans -->
+  <div class="kanban-list" id="kanban-list"></div>
+
+  <!-- État vide -->
+  <div id="kanban-empty" class="empty">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="4" rx="1"/><rect x="2" y="13" width="20" height="4" rx="1"/></svg>
+    <div>Sélectionnez un article et cliquez sur Générer.</div>
+  </div>
+
+</div><!-- end tab-kanban -->
+</main><!-- end main -->
+
+
+<!-- ═══════════════════ SCANNER MODAL -->
+<div class="modal-bg" id="scanner-modal">
+  <div class="modal">
+    <h3>📷 Scanner un QR code</h3>
+    <div id="qr-reader"></div>
+    <div id="qr-status">Pointez la caméra vers le QR code d'un article.</div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeScanner()">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ EDIT ARTICLE MODAL -->
+<div class="modal-bg" id="edit-modal">
+  <div class="modal">
+    <h3>✏️ <span id="edit-modal-title">Modifier l'article</span> <span id="edit-modal-id"></span></h3>
+    <input type="hidden" id="edit-art-id">
+    <div class="form-group" id="edit-id-group" style="display:none;">
+      <label>N° article (ERP)</label>
+      <input type="number" id="edit-art-id-new" placeholder="ex: 90322">
+    </div>
+    <div class="form-group">
+      <label>Désignation</label>
+      <input type="text" id="edit-designation">
+    </div>
+    <div class="form-group">
+      <label>Famille</label>
+      <input type="text" id="edit-famille">
+    </div>
+    <div class="form-group">
+      <label>Type container (M/C/B)</label>
+      <input type="text" id="edit-type" maxlength="1">
+    </div>
+    <div class="form-group">
+      <label>Barres par rangée</label>
+      <input type="number" id="edit-bpr">
+    </div>
+    <div class="form-row" style="margin-top:8px;">
+      <div class="form-group" style="margin:0;">
+        <label>Barres par paquet</label>
+        <input type="number" id="edit-bpp">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeEditModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveArticle()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ EDIT ENTRY MODAL -->
+<div class="modal-bg" id="edit-entry-modal">
+  <div class="modal">
+    <h3>✏️ Corriger une saisie</h3>
+    <p id="edit-entry-art-name" style="font-size:13px;color:var(--blue);font-weight:700;margin-bottom:14px;"></p>
+    <input type="hidden" id="edit-entry-art-id">
+    <input type="hidden" id="edit-entry-prod">
+    <div class="form-row">
+      <div class="form-group" style="margin:0;">
+        <label>Mètres containers</label>
+        <input type="number" id="ee-mrack" min="0" value="0" oninput="recalcEditEntry()">
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label>Nb rangées <span id="ee-hint-bpr" style="font-weight:400;color:var(--gray);font-size:11px;"></span></label>
+        <input type="number" id="ee-rangees" min="0" value="0" oninput="recalcEditEntry()">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="margin:0;">
+        <label>Nb paquets <span id="ee-hint-bpp" style="font-weight:400;color:var(--gray);font-size:11px;"></span></label>
+        <input type="number" id="ee-paquets" min="0" value="0" oninput="recalcEditEntry()">
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label>Nb barres vrac</label>
+        <input type="number" id="ee-vrac" min="0" value="0" oninput="recalcEditEntry()">
+      </div>
+    </div>
+    <div style="background:var(--blue3);border-radius:8px;padding:10px 14px;margin-top:4px;display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-size:13px;color:var(--gray);">Total recalculé</span>
+      <span id="ee-total" style="font-size:22px;font-weight:800;color:var(--blue);">0 m</span>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeEditEntry()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveEditEntry()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ CONFIRM MODAL -->
+<div class="modal-bg" id="confirm-modal">
+  <div class="modal">
+    <h3 id="confirm-title">Confirmation</h3>
+    <p id="confirm-msg" style="color:#555;font-size:14px;margin-bottom:16px;"></p>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeConfirm()">Annuler</button>
+      <button class="btn btn-danger" id="confirm-ok-btn">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ TOAST -->
+<div id="toast"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════════════════════════════ -->
+<script>
+// ──────────────────────────────────────────────────────────────────
+//  BASE ARTICLES — TGI PP (eclisses plastique)
+// ──────────────────────────────────────────────────────────────────
+const DEFAULT_TGI = [
+  // TGI GRIS 7040
+  {id:90310,designation:"10FW",famille:"TGI GRIS 7040",couleur:"gris",typeContainer:"M",qtyContainer:14976,barresRangee:96,  barresPaquet:16},
+  {id:90312,designation:"12FW",famille:"TGI GRIS 7040",couleur:"gris",typeContainer:"M",qtyContainer:12500,barresRangee:92,  barresPaquet:16},
+  {id:90314,designation:"14FW",famille:"TGI GRIS 7040",couleur:"gris",typeContainer:"M",qtyContainer:12096,barresRangee:96,  barresPaquet:16},
+  {id:90316,designation:"16FW",famille:"TGI GRIS 7040",couleur:"gris",typeContainer:"M",qtyContainer:9720, barresRangee:102, barresPaquet:16},
+  {id:90318,designation:"18FW",famille:"TGI GRIS 7040",couleur:"gris",typeContainer:"M",qtyContainer:8640, barresRangee:96,  barresPaquet:16},
+  {id:90320,designation:"20FW",famille:"TGI GRIS 7040",couleur:"gris",typeContainer:"M",qtyContainer:8100, barresRangee:96,  barresPaquet:16},
+  // TGI NOIR 9005
+  {id:90208,designation:"8NW", famille:"TGI NOIR 9005", couleur:"noir",typeContainer:"M",qtyContainer:10000,barresRangee:20,  barresPaquet:10},
+  {id:90210,designation:"10NW",famille:"TGI NOIR 9005", couleur:"noir",typeContainer:"M",qtyContainer:14976,barresRangee:80,  barresPaquet:16},
+  {id:90212,designation:"12NW",famille:"TGI NOIR 9005", couleur:"noir",typeContainer:"M",qtyContainer:13824,barresRangee:100, barresPaquet:16},
+  {id:90214,designation:"14NW",famille:"TGI NOIR 9005", couleur:"noir",typeContainer:"M",qtyContainer:12096,barresRangee:96,  barresPaquet:16},
+  {id:90215,designation:"15NW",famille:"TGI NOIR 9005", couleur:"noir",typeContainer:"C",qtyContainer:11520,barresRangee:null,barresPaquet:15},
+  {id:90216,designation:"16NW",famille:"TGI NOIR 9005", couleur:"noir",typeContainer:"M",qtyContainer:9720, barresRangee:96,  barresPaquet:15},
+  {id:90218,designation:"18NW",famille:"TGI NOIR 9005", couleur:"noir",typeContainer:"M",qtyContainer:8640, barresRangee:95,  barresPaquet:16},
+  {id:90220,designation:"20NW",famille:"TGI NOIR 9005", couleur:"noir",typeContainer:"M",qtyContainer:8100, barresRangee:95,  barresPaquet:16},
+  {id:90222,designation:"22NW",famille:"TGI NOIR 9005", couleur:"noir",typeContainer:"M",qtyContainer:6912, barresRangee:95,  barresPaquet:16},
+  {id:90224,designation:"24NW",famille:"TGI NOIR 9005", couleur:"noir",typeContainer:"M",qtyContainer:6336, barresRangee:95,  barresPaquet:16},
+  {id:90226,designation:"26NW",famille:"TGI NOIR 9005", couleur:"noir",typeContainer:"C",qtyContainer:288,  barresRangee:null,barresPaquet:null},
+  {id:90228,designation:"28NW",famille:"TGI NOIR 9005", couleur:"noir",typeContainer:"C",qtyContainer:288,  barresRangee:null,barresPaquet:null},
+  // TGI BLANC 9016
+  {id:90410,designation:"10BW",famille:"TGI BLANC 9016",couleur:"blanc",typeContainer:"M",qtyContainer:14976,barresRangee:20,  barresPaquet:10},
+  {id:90412,designation:"12BW",famille:"TGI BLANC 9016",couleur:"blanc",typeContainer:"M",qtyContainer:13824,barresRangee:80,  barresPaquet:16},
+  {id:90414,designation:"14BW",famille:"TGI BLANC 9016",couleur:"blanc",typeContainer:"M",qtyContainer:12096,barresRangee:96,  barresPaquet:16},
+  {id:90416,designation:"16BW",famille:"TGI BLANC 9016",couleur:"blanc",typeContainer:"M",qtyContainer:9690, barresRangee:96,  barresPaquet:16},
+  {id:90418,designation:"18BW",famille:"TGI BLANC 9016",couleur:"blanc",typeContainer:"M",qtyContainer:8640, barresRangee:96,  barresPaquet:16},
+  {id:90420,designation:"20BW",famille:"TGI BLANC 9016",couleur:"blanc",typeContainer:"M",qtyContainer:8100, barresRangee:96,  barresPaquet:16},
+  // TGI DROME RAL 7035
+  {id:90510,designation:"10GW",famille:"TGI DROME 7035",couleur:"drome",typeContainer:"M",qtyContainer:14976,barresRangee:102, barresPaquet:16},
+  {id:90512,designation:"12GW",famille:"TGI DROME 7035",couleur:"drome",typeContainer:"M",qtyContainer:13824,barresRangee:102, barresPaquet:16},
+  {id:90514,designation:"14GW",famille:"TGI DROME 7035",couleur:"drome",typeContainer:"M",qtyContainer:12096,barresRangee:102, barresPaquet:16},
+  {id:90516,designation:"16GW",famille:"TGI DROME 7035",couleur:"drome",typeContainer:"M",qtyContainer:9792, barresRangee:102, barresPaquet:16},
+  {id:90518,designation:"18GW",famille:"TGI DROME 7035",couleur:"drome",typeContainer:"M",qtyContainer:8640, barresRangee:102, barresPaquet:16},
+  {id:90520,designation:"20GW",famille:"TGI DROME 7035",couleur:"drome",typeContainer:"M",qtyContainer:6000, barresRangee:102, barresPaquet:16},
+  // TGI MARRON 8003
+  {id:90616,designation:"16MCW",famille:"TGI MARRON 8003",couleur:"marron",typeContainer:"C",qtyContainer:480,barresRangee:null,barresPaquet:20},
+];
+
+// ──────────────────────────────────────────────────────────────────
+//  BASE ARTICLES — SW (Swisspacer)  — N° ERP issus de l'ERP
+// ──────────────────────────────────────────────────────────────────
+const DEFAULT_SW = [
+  // SW GRIS TITAN RAL 9023 (ERP 918xx)
+  {id:91810,designation:"10mm",famille:"SW GRIS TITAN 9023",couleur:"sw_9023",barresRangee:null,barresPaquet:12},
+  {id:91812,designation:"12mm",famille:"SW GRIS TITAN 9023",couleur:"sw_9023",barresRangee:null,barresPaquet:12},
+  {id:91814,designation:"14mm",famille:"SW GRIS TITAN 9023",couleur:"sw_9023",barresRangee:null,barresPaquet:12},
+  {id:91816,designation:"16mm",famille:"SW GRIS TITAN 9023",couleur:"sw_9023",barresRangee:96,  barresPaquet:12},
+  {id:91818,designation:"18mm",famille:"SW GRIS TITAN 9023",couleur:"sw_9023",barresRangee:null,barresPaquet:12},
+  {id:91820,designation:"20mm",famille:"SW GRIS TITAN 9023",couleur:"sw_9023",barresRangee:null,barresPaquet:12},
+  // SW NOIR RAL 9005 (ERP 917xx)
+  {id:91710,designation:"10mm",famille:"SW NOIR 9005",couleur:"sw_noir",barresRangee:null,barresPaquet:12},
+  {id:91712,designation:"12mm",famille:"SW NOIR 9005",couleur:"sw_noir",barresRangee:null,barresPaquet:12},
+  {id:91714,designation:"14mm",famille:"SW NOIR 9005",couleur:"sw_noir",barresRangee:null,barresPaquet:12},
+  {id:91716,designation:"16mm",famille:"SW NOIR 9005",couleur:"sw_noir",barresRangee:null,barresPaquet:12},
+  {id:91718,designation:"18mm",famille:"SW NOIR 9005",couleur:"sw_noir",barresRangee:null,barresPaquet:12},
+  {id:91720,designation:"20mm",famille:"SW NOIR 9005",couleur:"sw_noir",barresRangee:96,  barresPaquet:12},
+  {id:91724,designation:"24mm",famille:"SW NOIR 9005",couleur:"sw_noir",barresRangee:null,barresPaquet:null},
+  {id:91727,designation:"27mm",famille:"SW NOIR 9005",couleur:"sw_noir",barresRangee:null,barresPaquet:12},
+  // SW GRIS RAL 7035 (ERP 915xx)
+  {id:91522,designation:"12mm",famille:"SW GRIS 7035",couleur:"sw_7035",barresRangee:null,barresPaquet:12},
+  {id:91523,designation:"14mm",famille:"SW GRIS 7035",couleur:"sw_7035",barresRangee:null,barresPaquet:12},
+  {id:91524,designation:"16mm",famille:"SW GRIS 7035",couleur:"sw_7035",barresRangee:96,  barresPaquet:12},
+  {id:91525,designation:"18mm",famille:"SW GRIS 7035",couleur:"sw_7035",barresRangee:null,barresPaquet:12},
+  {id:91526,designation:"20mm",famille:"SW GRIS 7035",couleur:"sw_7035",barresRangee:null,barresPaquet:12},
+  // EQUERRES BUTYLEES (ID provisoires 850xx — à confirmer avec ERP)
+  {id:85010,designation:"10mm",famille:"SW EQ BUTYLEES",couleur:"sw_eq_b",barresRangee:2,barresPaquet:12},
+  {id:85012,designation:"12mm",famille:"SW EQ BUTYLEES",couleur:"sw_eq_b",barresRangee:2,barresPaquet:12},
+  {id:85014,designation:"14mm",famille:"SW EQ BUTYLEES",couleur:"sw_eq_b",barresRangee:2,barresPaquet:12},
+  {id:85016,designation:"16mm",famille:"SW EQ BUTYLEES",couleur:"sw_eq_b",barresRangee:3,barresPaquet:12},
+  {id:85018,designation:"18mm",famille:"SW EQ BUTYLEES",couleur:"sw_eq_b",barresRangee:1,barresPaquet:12},
+  {id:85020,designation:"20mm",famille:"SW EQ BUTYLEES",couleur:"sw_eq_b",barresRangee:4,barresPaquet:12},
+  {id:85024,designation:"24mm",famille:"SW EQ BUTYLEES",couleur:"sw_eq_b",barresRangee:2,barresPaquet:12},
+  {id:85027,designation:"27mm",famille:"SW EQ BUTYLEES",couleur:"sw_eq_b",barresRangee:1,barresPaquet:12},
+  // EQUERRES NON BUTYLEES (ID provisoires 860xx)
+  {id:86010,designation:"10mm",famille:"SW EQ NON BUTYLE",couleur:"sw_eq_nb",barresRangee:2, barresPaquet:null},
+  {id:86027,designation:"27mm",famille:"SW EQ NON BUTYLE",couleur:"sw_eq_nb",barresRangee:1, barresPaquet:null},
+];
+
+// ──────────────────────────────────────────────────────────────────
+//  BASE ARTICLES — ALU (espaceurs aluminium)  — N° ERP 99xxx
+// ──────────────────────────────────────────────────────────────────
+const DEFAULT_ALU = [
+  // ALU NATUREL — ERP 991xx
+  {id:99106,designation:"6N",  famille:"ALU NATUREL",couleur:"alu_nat", typeContainer:"M",qtyContainer:26800,barresRangee:102,barresPaquet:20},
+  {id:99108,designation:"8N",  famille:"ALU NATUREL",couleur:"alu_nat", typeContainer:"M",qtyContainer:24300,barresRangee:102,barresPaquet:15},
+  {id:99110,designation:"10N", famille:"ALU NATUREL",couleur:"alu_nat", typeContainer:"M",qtyContainer:22600,barresRangee:80, barresPaquet:14},
+  {id:99112,designation:"12N", famille:"ALU NATUREL",couleur:"alu_nat", typeContainer:"M",qtyContainer:19584,barresRangee:102,barresPaquet:17},
+  {id:99114,designation:"14N", famille:"ALU NATUREL",couleur:"alu_nat", typeContainer:"M",qtyContainer:17136,barresRangee:102,barresPaquet:17},
+  {id:99115,designation:"15N", famille:"ALU NATUREL",couleur:"alu_nat", typeContainer:"C",qtyContainer:1080, barresRangee:null,barresPaquet:null},
+  {id:99116,designation:"16N", famille:"ALU NATUREL",couleur:"alu_nat", typeContainer:"M",qtyContainer:14076,barresRangee:102,barresPaquet:17},
+  {id:99118,designation:"18N", famille:"ALU NATUREL",couleur:"alu_nat", typeContainer:"M",qtyContainer:13464,barresRangee:102,barresPaquet:17},
+  {id:99120,designation:"20N", famille:"ALU NATUREL",couleur:"alu_nat", typeContainer:"M",qtyContainer:12240,barresRangee:102,barresPaquet:17},
+  {id:99122,designation:"22N", famille:"ALU NATUREL",couleur:"alu_nat", typeContainer:"M",qtyContainer:11160,barresRangee:102,barresPaquet:null},
+  {id:99127,designation:"27N", famille:"ALU NATUREL",couleur:"alu_nat", typeContainer:"M",qtyContainer:500,  barresRangee:102,barresPaquet:17},
+  // ALU NOIR — ERP 992xx
+  {id:99206,designation:"6NO", famille:"ALU NOIR",   couleur:"alu_noir",typeContainer:"C",qtyContainer:2750, barresRangee:null,barresPaquet:null},
+  {id:99208,designation:"8NO", famille:"ALU NOIR",   couleur:"alu_noir",typeContainer:"C",qtyContainer:1980, barresRangee:null,barresPaquet:null},
+  {id:99210,designation:"10NO",famille:"ALU NOIR",   couleur:"alu_noir",typeContainer:"C",qtyContainer:1500, barresRangee:null,barresPaquet:null},
+  {id:99212,designation:"12NO",famille:"ALU NOIR",   couleur:"alu_noir",typeContainer:"M",qtyContainer:19584,barresRangee:102,barresPaquet:17},
+  {id:99214,designation:"14NO",famille:"ALU NOIR",   couleur:"alu_noir",typeContainer:"M",qtyContainer:17136,barresRangee:102,barresPaquet:17},
+  {id:99215,designation:"15NO",famille:"ALU NOIR",   couleur:"alu_noir",typeContainer:"C",qtyContainer:null, barresRangee:null,barresPaquet:null},
+  {id:99216,designation:"16NO",famille:"ALU NOIR",   couleur:"alu_noir",typeContainer:"M",qtyContainer:14076,barresRangee:102,barresPaquet:17},
+  {id:99218,designation:"18NO",famille:"ALU NOIR",   couleur:"alu_noir",typeContainer:"M",qtyContainer:13464,barresRangee:102,barresPaquet:17},
+  {id:99220,designation:"20NO",famille:"ALU NOIR",   couleur:"alu_noir",typeContainer:"M",qtyContainer:12240,barresRangee:102,barresPaquet:17},
+  {id:99224,designation:"24NO",famille:"ALU NOIR",   couleur:"alu_noir",typeContainer:"C",qtyContainer:630,  barresRangee:null,barresPaquet:null},
+  // ALU BLANC — ERP 994xx
+  {id:99410,designation:"10B", famille:"ALU BLANC",  couleur:"alu_blanc",typeContainer:"C",qtyContainer:1500, barresRangee:null, barresPaquet:null},
+  {id:99412,designation:"12B", famille:"ALU BLANC",  couleur:"alu_blanc",typeContainer:"C",qtyContainer:1300, barresRangee:102,  barresPaquet:null},
+  {id:99414,designation:"14B", famille:"ALU BLANC",  couleur:"alu_blanc",typeContainer:"C",qtyContainer:1100, barresRangee:102,  barresPaquet:17},
+  {id:99416,designation:"16B", famille:"ALU BLANC",  couleur:"alu_blanc",typeContainer:"M",qtyContainer:14076,barresRangee:102,  barresPaquet:null},
+  {id:99418,designation:"18B", famille:"ALU BLANC",  couleur:"alu_blanc",typeContainer:"C",qtyContainer:880,  barresRangee:102,  barresPaquet:null},
+  {id:99420,designation:"20B", famille:"ALU BLANC",  couleur:"alu_blanc",typeContainer:"C",qtyContainer:12000,barresRangee:102,  barresPaquet:17},
+  // ALU DORÉ — IDs provisoires 996xx (non trouvés dans ERP — à confirmer)
+  {id:99612,designation:"12D", famille:"ALU DORÉ",   couleur:"alu_dore", typeContainer:"C",qtyContainer:1300, barresRangee:null,barresPaquet:null},
+  {id:99614,designation:"14D", famille:"ALU DORÉ",   couleur:"alu_dore", typeContainer:"C",qtyContainer:1100, barresRangee:null,barresPaquet:null},
+  {id:99616,designation:"16D", famille:"ALU DORÉ",   couleur:"alu_dore", typeContainer:"C",qtyContainer:950,  barresRangee:null,barresPaquet:null},
+  {id:99618,designation:"18D", famille:"ALU DORÉ",   couleur:"alu_dore", typeContainer:"C",qtyContainer:880,  barresRangee:null,barresPaquet:null},
+];
+
+// ──────────────────────────────────────────────────────────────────
+//  CATALOGUE PRODUITS — extensible pour futurs produits
+// ──────────────────────────────────────────────────────────────────
+const PRODUCTS = {
+  TGI: {label:'TGI (PP)',       defaultArticles: DEFAULT_TGI},
+  SW:  {label:'SW Swisspacer',  defaultArticles: DEFAULT_SW},
+  ALU: {label:'ALU',            defaultArticles: DEFAULT_ALU},
+  // Futurs : TGI_ALU, etc.
+};
+
+// ──────────────────────────────────────────────────────────────────
+//  STATE — localStorage multi-produit
+// ──────────────────────────────────────────────────────────────────
+let currentProduct = 'TGI';
+
+function prodKey(suffix){ return `${currentProduct.toLowerCase()}_${suffix}`; }
+
+function loadArticles(prod){
+  const p = prod||currentProduct;
+  const def = PRODUCTS[p].defaultArticles;
+  try{
+    const s=localStorage.getItem(`${p.toLowerCase()}_articles`);
+    if(!s) return [...def];
+    const stored=JSON.parse(s);
+    // Si de nouveaux articles ont été ajoutés aux défauts, on recharge les défauts
+    // (les modifications manuelles de l'utilisateur sont perdues, mais c'est acceptable)
+    if(stored.length < def.length) return [...def];
+    // Vérifier aussi si tous les IDs des défauts sont présents
+    const storedIds=new Set(stored.map(a=>a.id));
+    if(def.some(a=>!storedIds.has(a.id))) return [...def];
+    return stored;
+  }
+  catch{return[...def];}
+}
+function saveArticles(a){ localStorage.setItem(prodKey('articles'),JSON.stringify(a)); }
+
+function loadEntries(prod){
+  const p = prod||currentProduct;
+  try{
+    const s=localStorage.getItem(`${p.toLowerCase()}_entries`);
+    if(!s) return [];
+    const parsed=JSON.parse(s);
+    // Migration : s'assurer que chaque entrée a un tableau saisies
+    return parsed.map(e=>{
+      if(!e.saisies||!e.saisies.length){
+        e.saisies=[{
+          id: Date.parse(e.date)||Date.now(),
+          nbRacks:e.nbRacks||0, mParRack:e.mParRack||0, mRacks:e.mRacks||0,
+          nbRangees:e.nbRangees||0, nbPaquets:e.nbPaquets||0, nbVrac:e.nbVrac||0,
+          addMl:e.totalMl||0, date:e.date
+        }];
+      }
+      return e;
+    });
+  }
+  catch{return[];}
+}
+function saveEntries(e){ localStorage.setItem(prodKey('entries'),JSON.stringify(e)); }
+
+function getRackMetres(artId){
+  try{const d=JSON.parse(localStorage.getItem(prodKey('rack_m'))||'{}');return d[artId]||0;}
+  catch{return 0;}
+}
+function saveRackMetres(){
+  if(!selectedArticle)return;
+  const v=parseInt(document.getElementById('m-par-rack').value)||0;
+  if(!v)return;
+  const d=JSON.parse(localStorage.getItem(prodKey('rack_m'))||'{}');
+  d[selectedArticle.id]=v;
+  localStorage.setItem(prodKey('rack_m'),JSON.stringify(d));
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  OCR ÉTIQUETTE — lire les mètres/rack depuis une photo
+// ──────────────────────────────────────────────────────────────────
+let _tesseractLoading=null;
+function loadTesseract(){
+  if(window.Tesseract) return Promise.resolve();
+  if(_tesseractLoading) return _tesseractLoading;
+  _tesseractLoading=new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js';
+    s.onload=()=>resolve();
+    s.onerror=()=>reject(new Error('Téléchargement OCR impossible (vérifie la connexion internet).'));
+    document.head.appendChild(s);
+  });
+  return _tesseractLoading;
+}
+
+async function readLabelPhoto(ev){
+  const file=ev.target.files&&ev.target.files[0];
+  ev.target.value=''; // permet de reprendre la même photo
+  if(!file) return;
+  const panel=document.getElementById('ocr-panel');
+  const status=document.getElementById('ocr-status');
+  const chips=document.getElementById('ocr-chips');
+  const raw=document.getElementById('ocr-raw');
+  panel.style.display='block';
+  chips.innerHTML=''; raw.style.display='none'; raw.textContent='';
+  status.textContent='Lecture en cours…';
+  try{
+    await loadTesseract();
+    const url=URL.createObjectURL(file);
+    const {data}=await Tesseract.recognize(url,'fra+eng');
+    URL.revokeObjectURL(url);
+    const text=(data.text||'').trim();
+    const parseQty=raw=>{
+      let s=String(raw).trim().replace(/[\s\u00a0]/g,'');
+      if(s.includes('.')&&s.includes(',')){
+        if(s.lastIndexOf(',')>s.lastIndexOf('.')) s=s.replace(/\./g,'').replace(',', '.');
+        else s=s.replace(/,/g,'');
+      } else if(s.includes(',')){
+        const after=s.split(',').pop();
+        s = after.length<=2 ? s.replace(',', '.') : s.replace(/,/g,'');
+      } else if(s.includes('.')){
+        const parts=s.split('.'), after=parts[parts.length-1];
+        if(parts.length>2 || after.length===3) s=s.replace(/\./g,'');
+      }
+      return Math.round(parseFloat(s));
+    };
+    const toInt=parseQty;
+    const addUniq=(arr,n)=>{ if(!isNaN(n)&&n>0&&arr.indexOf(n)===-1) arr.push(n); };
+
+    // 1) PRIORITE - quantite en metres selon le fournisseur
+    const priority=[];
+    let pm;
+    const reMt=/\bMt\.?\s*([\d][\d.,]*\d|\d)/gi;                       // Profilglass "Mt. 14.076"
+    while((pm=reMt.exec(text))!==null) addUniq(priority,parseQty(pm[1]));
+    const reQte=/quantit[ée]\s*:?\s*([\d][\d.,\s\u00a0]*\d|\d)\s*m[èe]tres?/gi; // Technoform
+    while((pm=reQte.exec(text))!==null) addUniq(priority,parseQty(pm[1]));
+    const reMetres=/([\d][\d.,\s\u00a0]*\d|\d)\s*m[èe]tres?\b/gi;
+    while((pm=reMetres.exec(text))!==null) addUniq(priority,parseQty(pm[1]));
+    const reM=/([\d][\d.,]*\d|\d)\s*m(?![a-zA-Zàâèéêîïôûü])/gi;                  // Swisspacer "612,0 m" / "13.824,0 m"
+    while((pm=reM.exec(text))!==null) addUniq(priority,parseQty(pm[1]));
+
+    // 2) Tous les autres nombres en secours
+    const others=[];
+    const re=/\d[\d.,\s\u00a0]*\d|\d/g; let m;
+    while((m=re.exec(text))!==null){
+      const n=toInt(m[0]);
+      if(priority.indexOf(n)===-1) addUniq(others,n);
+    }
+    others.sort((a,b)=>b-a);
+    const found=[...priority, ...others.filter(n=>priority.indexOf(n)===-1)];
+
+    if(found.length===0){
+      status.textContent='Aucun nombre détecté. Réessaie une photo nette et bien cadrée, ou saisis à la main.';
+      raw.style.display=text?'block':'none'; raw.textContent=text;
+      return;
+    }
+    status.textContent = priority.length
+      ? 'Quantité détectée — touche pour valider (le 1er est le plus probable) :'
+      : 'Aucune ligne « mètres » nette. Touche le bon nombre :';
+    found.slice(0,8).forEach((n,idx)=>{
+      const isTop = priority.indexOf(n)!==-1;
+      const b=document.createElement('button');
+      b.type='button';
+      b.textContent = isTop ? n+' m' : n;
+      b.style.cssText = isTop
+        ? 'background:var(--blue);border:1px solid var(--blue);color:#fff;border-radius:14px;padding:5px 14px;font-size:14px;font-weight:800;cursor:pointer;'
+        : 'background:#fff;border:1px solid var(--blue);color:var(--blue2);border-radius:14px;padding:4px 12px;font-size:13px;font-weight:700;cursor:pointer;';
+      b.onclick=()=>{
+        const inp=document.getElementById('m-par-rack');
+        inp.value=n; saveRackMetres(); calcTotal();
+        status.textContent='Valeur '+n+' insérée. Modifiable à la main si besoin.';
+        chips.querySelectorAll('button').forEach(x=>x.style.outline='none');
+        b.style.outline='3px solid #7da7ff';
+      };
+      chips.appendChild(b);
+    });
+    // Lien pour voir le texte brut
+    const more=document.createElement('button');
+    more.type='button'; more.textContent='texte lu';
+    more.style.cssText='background:transparent;border:none;color:var(--gray);font-size:11px;text-decoration:underline;cursor:pointer;';
+    more.onclick=()=>{ raw.style.display=raw.style.display==='none'?'block':'none'; };
+    raw.textContent=text;
+    chips.appendChild(more);
+  }catch(err){
+    status.textContent='Erreur : '+(err&&err.message?err.message:'OCR impossible')+' — saisis la quantité à la main.';
+  }
+}
+
+let articles = loadArticles();
+let entries  = loadEntries();
+let selectedArticle = null;
+let html5QrCode = null;
+
+// ──────────────────────────────────────────────────────────────────
+//  SWITCH PRODUIT
+// ──────────────────────────────────────────────────────────────────
+function switchProduct(prod){
+  if(!PRODUCTS[prod]){toast('Produit inconnu','err');return;}
+  currentProduct = prod;
+  articles = loadArticles(prod);
+  entries  = loadEntries(prod);
+  selectedArticle = null;
+  // Mise à jour UI header
+  document.getElementById('product-label').textContent = prod;
+  // Mise à jour boutons sélecteur
+  document.querySelectorAll('.prod-btn').forEach(b=>b.classList.toggle('active',b.dataset.prod===prod));
+  // Reset saisie
+  clearArticle();
+  // Refresh onglets
+  renderRecent();
+  renderSynthese();
+  renderParams();
+  renderEtiquettes();
+  renderKanban();
+  showTab('saisie', document.querySelector('nav button'));
+  toast(`Produit : ${PRODUCTS[prod].label}`,'ok');
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  INIT
+// ──────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded',()=>{
+  updateHeaderDate();
+  renderRecent();
+  renderSynthese();
+  renderParams();
+  renderEtiquettes();
+  renderKanban();
+});
+
+function updateHeaderDate(){
+  const now=new Date();
+  document.getElementById('header-date').textContent=
+    now.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'short'});
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  NAVIGATION
+// ──────────────────────────────────────────────────────────────────
+function showTab(id,btn){
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+  if(id==='synthese')   renderSynthese();
+  if(id==='params')     renderParams();
+  if(id==='etiquettes') renderEtiquettes();
+  if(id==='kanban')     renderKanban();
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  ARTICLE SELECTOR
+// ──────────────────────────────────────────────────────────────────
+function filterArticles(){
+  const q=document.getElementById('article-search').value.toLowerCase();
+  showDropdown(q);
+}
+
+function showDropdown(q=''){
+  const dd=document.getElementById('article-dropdown');
+  const qLow=q.toLowerCase();
+  const list=q
+    ? articles.filter(a=>
+        String(a.id).includes(q)||
+        a.designation.toLowerCase().includes(qLow)||
+        a.famille.toLowerCase().includes(qLow))
+    : articles; // sans recherche : tous les articles
+
+  if(!list.length){dd.style.display='none';return;}
+
+  if(q){
+    // Résultats filtrés — liste plate
+    dd.innerHTML=list.map(a=>`
+      <div class="opt" onclick="selectArticle(${a.id})">
+        <span class="opt-id">${a.id}</span> — ${a.designation}
+        <div class="opt-sub">${a.famille}</div>
+      </div>`).join('');
+  } else {
+    // Sans recherche — groupé par famille
+    const familles=[...new Set(articles.map(a=>a.famille))];
+    dd.innerHTML=familles.map(fam=>{
+      const items=articles.filter(a=>a.famille===fam);
+      return `<div style="padding:5px 10px 2px;font-size:10px;font-weight:800;color:var(--blue);background:var(--blue3);text-transform:uppercase;letter-spacing:.5px;">${fam}</div>`
+        +items.map(a=>`
+          <div class="opt" onclick="selectArticle(${a.id})">
+            <span class="opt-id">${a.id}</span> — ${a.designation}
+          </div>`).join('');
+    }).join('');
+  }
+  dd.style.display='block';
+}
+
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#article-search-wrap'))
+    document.getElementById('article-dropdown').style.display='none';
+});
+
+function selectArticle(id){
+  selectedArticle=articles.find(a=>a.id===id);
+  if(!selectedArticle) return;
+  document.getElementById('article-search').value=`${selectedArticle.id} — ${selectedArticle.designation}`;
+  document.getElementById('article-dropdown').style.display='none';
+
+  // Banner info
+  document.getElementById('ai-id').textContent=selectedArticle.id;
+  document.getElementById('ai-name').textContent=`${selectedArticle.designation} | ${selectedArticle.famille}`;
+  const tags=document.getElementById('ai-tags');
+  tags.innerHTML=`
+    ${selectedArticle.barresRangee?`<span class="tag tag-gray">${selectedArticle.barresRangee} barres/rangée</span>`:''}
+    ${selectedArticle.barresPaquet?`<span class="tag tag-gray">${selectedArticle.barresPaquet} barres/paquet</span>`:''}
+  `;
+  document.getElementById('article-info').style.display='block';
+
+  // Afficher le cumul déjà saisi s'il existe
+  const existing=entries.find(e=>e.articleId===selectedArticle.id);
+  const cumulInfo=document.getElementById('cumul-info');
+  if(existing&&existing.totalMl>0){
+    document.getElementById('cumul-ml').textContent=existing.totalMl.toLocaleString('fr');
+    cumulInfo.style.display='block';
+  } else {
+    cumulInfo.style.display='none';
+  }
+
+  document.getElementById('hint-bpr').textContent=selectedArticle.barresRangee??'N/A';
+  document.getElementById('hint-bpp').textContent=selectedArticle.barresPaquet??'N/A';
+
+  // Montrer le formulaire
+  document.getElementById('qty-card').style.display='block';
+  document.getElementById('result-box').style.display='block';
+  document.getElementById('save-btn').style.display='flex';
+
+  // Champs à 0 pour la nouvelle saisie (chaque container a une quantité différente)
+  ['m-par-rack','nb-rangees','nb-paquets','nb-vrac'].forEach(id=>{
+    document.getElementById(id).value=0;
+  });
+  calcTotal();
+}
+
+function clearArticle(){
+  selectedArticle=null;
+  document.getElementById('article-search').value='';
+  document.getElementById('article-info').style.display='none';
+  document.getElementById('qty-card').style.display='none';
+  document.getElementById('result-box').style.display='none';
+  document.getElementById('save-btn').style.display='none';
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  CALCUL
+// ──────────────────────────────────────────────────────────────────
+function calcTotal(){
+  if(!selectedArticle) return;
+  const mContainer = parseInt(document.getElementById('m-par-rack').value)||0;
+  const rangees  = parseInt(document.getElementById('nb-rangees').value)||0;
+  const paquets  = parseInt(document.getElementById('nb-paquets').value)||0;
+  const vrac     = parseInt(document.getElementById('nb-vrac').value)||0;
+
+  const mRacks   = mContainer;                                  // un container complet
+  const mRangees = rangees * (selectedArticle.barresRangee||0) * 6;
+  const mPaquets = paquets * (selectedArticle.barresPaquet||0) * 6;
+  const mVrac    = vrac * 6;
+  const total    = mRacks + mRangees + mPaquets + mVrac;
+
+  // Sous-total container
+  const rackEl=document.getElementById('rack-subtotal');
+  rackEl.textContent=mContainer?`1 container = ${mContainer.toLocaleString('fr')} m`:'';
+
+  document.getElementById('res-ml').textContent=total.toLocaleString('fr');
+  const parts=[];
+  if(mRacks)   parts.push(`${mRacks.toLocaleString('fr')} m (container)`);
+  if(rangees)  parts.push(`${rangees} rang.×${selectedArticle.barresRangee??0}×6`);
+  if(paquets)  parts.push(`${paquets} paq.×${selectedArticle.barresPaquet??0}×6`);
+  if(vrac)     parts.push(`${vrac} vrac×6`);
+  document.getElementById('res-detail').textContent=parts.length?parts.join(' + '):'Saisissez les quantités';
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  ENREGISTRER — mode CUMUL
+// ──────────────────────────────────────────────────────────────────
+function saveEntry(){
+  if(!selectedArticle) return;
+  const mContainer = parseInt(document.getElementById('m-par-rack').value)||0;
+  const rangees  = parseInt(document.getElementById('nb-rangees').value)||0;
+  const paquets  = parseInt(document.getElementById('nb-paquets').value)||0;
+  const vrac     = parseInt(document.getElementById('nb-vrac').value)||0;
+
+  if(mContainer===0&&rangees===0&&paquets===0&&vrac===0){
+    toast('Saisissez au moins une quantité','err');return;
+  }
+
+  const nbRacks = mContainer>0 ? 1 : 0;
+  const mRacks  = mContainer;
+  const addM    = mRacks
+               + rangees*(selectedArticle.barresRangee||0)*6
+               + paquets*(selectedArticle.barresPaquet||0)*6
+               + vrac*6;
+
+  const newSaisie={
+    id: Date.now(),
+    nbRacks, mParRack:mContainer, mRacks,
+    nbRangees:rangees, nbPaquets:paquets, nbVrac:vrac,
+    addMl:addM, date:new Date().toISOString()
+  };
+
+  const idx=entries.findIndex(e=>e.articleId===selectedArticle.id);
+  if(idx>=0){
+    if(!entries[idx].saisies) entries[idx].saisies=[];
+    entries[idx].saisies.push(newSaisie);
+    entries[idx].totalMl=entries[idx].saisies.reduce((s,x)=>s+(x.addMl||0),0);
+    entries[idx].date=newSaisie.date;
+  } else {
+    entries.push({
+      articleId:selectedArticle.id,
+      designation:selectedArticle.designation,
+      famille:selectedArticle.famille,
+      saisies:[newSaisie],
+      totalMl:addM,
+      date:newSaisie.date
+    });
+  }
+
+  saveEntries(entries);
+  renderRecent();
+  const newTotal=entries.find(e=>e.articleId===selectedArticle.id).totalMl;
+  toast(`✅ +${addM.toLocaleString('fr')} m → total ${newTotal.toLocaleString('fr')} m`,'ok');
+  clearArticle();
+}
+
+// Remettre à zéro un seul article (depuis la bannière)
+function resetOneArticle(){
+  if(!selectedArticle) return;
+  openConfirm(
+    `Remettre à zéro l'article ${selectedArticle.id}`,
+    `Supprimer toutes les saisies pour ${selectedArticle.designation} ?`,
+    ()=>{
+      entries=entries.filter(e=>e.articleId!==selectedArticle.id);
+      saveEntries(entries);
+      document.getElementById('cumul-info').style.display='none';
+      renderRecent();
+      toast(`Article ${selectedArticle.id} remis à zéro`);
+    }
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  RECENT
+// ──────────────────────────────────────────────────────────────────
+function renderRecent(){
+  const el=document.getElementById('recent-list');
+  const last=[...entries].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,5);
+  if(!last.length){el.innerHTML='<div style="color:var(--gray);font-size:13px;padding:4px 0;">Aucune saisie pour l\'instant.</div>';return;}
+  el.innerHTML=last.map(e=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--gray3);">
+      <div>
+        <span style="font-weight:700;color:var(--blue);">${e.articleId}</span>
+        <span style="font-size:12px;color:#555;margin-left:6px;">${e.designation}</span>
+        <div style="font-size:11px;color:var(--gray);">${new Date(e.date).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
+      </div>
+      <span style="font-weight:800;color:var(--blue);font-size:15px;">${e.totalMl.toLocaleString('fr')} m</span>
+    </div>
+  `).join('');
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  SYNTHÈSE
+// ──────────────────────────────────────────────────────────────────
+let synthActiveProd = null; // sous-onglet actif en synthèse
+let synthView = 'detail';   // 'detail' ou 'cumul'
+
+function renderSynthese(){
+  const tabsEl    = document.getElementById('synth-prod-tabs');
+  const viewTabsEl= document.getElementById('synth-view-tabs');
+  const contentEl = document.getElementById('synth-content');
+  const emptyEl   = document.getElementById('synth-empty');
+
+  // Charger les entrées de tous les produits
+  const allData = {};
+  for(const prod of Object.keys(PRODUCTS)){
+    const e = loadEntries(prod);
+    if(e.length) allData[prod] = e;
+  }
+
+  const prodsWithData = Object.keys(allData);
+
+  if(!prodsWithData.length){
+    tabsEl.innerHTML='';
+    viewTabsEl.style.display='none';
+    contentEl.innerHTML='';
+    emptyEl.style.display='block';
+    return;
+  }
+  emptyEl.style.display='none';
+  viewTabsEl.style.display='flex';
+
+  // Choisir le sous-onglet actif
+  if(!synthActiveProd || !allData[synthActiveProd]){
+    synthActiveProd = prodsWithData.includes(currentProduct) ? currentProduct : prodsWithData[0];
+  }
+
+  // Rendu des onglets produit
+  tabsEl.innerHTML = prodsWithData.map(prod=>`
+    <button class="synth-tab-btn${prod===synthActiveProd?' active':''}"
+      onclick="synthShowProd('${prod}')">
+      ${PRODUCTS[prod].label}
+      <span class="badge-count">${allData[prod].length}</span>
+    </button>`).join('');
+
+  // Mettre à jour le visuel des boutons vue
+  document.querySelectorAll('.synth-view-btn').forEach(b=>{
+    const isDetail = b.textContent.includes('Détail');
+    b.classList.toggle('active', synthView==='detail' ? isDetail : !isDetail);
+  });
+
+  // Données du produit actif
+  const prodEntries = allData[synthActiveProd] || [];
+  const prodArticles= loadArticles(synthActiveProd);
+  const sorted=[...prodEntries].sort((a,b)=>a.articleId-b.articleId);
+  const total=sorted.reduce((s,e)=>s+(e.totalMl||0),0);
+
+  const badgeMap={gris:'gris',noir:'noir',blanc:'blanc',drome:'drome',marron:'marron',
+    sw_9023:'gris',sw_noir:'noir',sw_7035:'gris',sw_eq_b:'noir',sw_eq_nb:'gris',
+    alu_nat:'gris',alu_noir:'noir',alu_blanc:'blanc',alu_dore:'gris'};
+
+  if(synthView === 'detail'){
+    // ── Vue DÉTAIL : une ligne par saisie individuelle
+    const allRows=[];
+    sorted.forEach(e=>{
+      const art=prodArticles.find(a=>a.id===e.articleId)||{};
+      const bc=badgeMap[art.couleur]||'gris';
+      const saisies=e.saisies||[];
+      saisies.forEach((s,si)=>{
+        const racks=s.nbRacks?`${s.nbRacks} cont. (${(s.mRacks||0).toLocaleString('fr')} m)`:'—';
+        const dateStr=new Date(s.date||e.date).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+        const isFirst=si===0;
+        const topBorder=isFirst&&allRows.length>0?'border-top:2px solid var(--blue3);':'';
+        allRows.push(`<tr style="${topBorder}">
+          <td>${isFirst?`<span class="badge badge-${bc}">${e.articleId}</span>`:`<span style="color:var(--gray);font-size:11px;">${e.articleId}</span>`}</td>
+          <td>${isFirst?e.designation:''}</td>
+          <td style="text-align:center;">${racks}</td>
+          <td style="text-align:center;">${s.nbRangees||0}</td>
+          <td style="text-align:center;">${s.nbPaquets||0}</td>
+          <td style="text-align:center;">${s.nbVrac||0}</td>
+          <td class="ml-col">${(s.addMl||0).toLocaleString('fr')} m</td>
+          <td style="font-size:10px;color:var(--gray);white-space:nowrap;">${dateStr}</td>
+          <td style="display:flex;gap:4px;">
+            <button class="del-btn" style="background:var(--blue3);color:var(--blue);" onclick="editSaisie(${e.articleId},${s.id})">✏️</button>
+            <button class="del-btn" onclick="deleteSaisie(${e.articleId},${s.id})">✕</button>
+          </td>
+        </tr>`);
+      });
+      if(saisies.length>1){
+        allRows.push(`<tr style="background:var(--blue3);">
+          <td colspan="5" style="font-size:11px;color:var(--blue2);font-weight:700;padding-left:10px;">Sous-total ${e.articleId} — ${e.designation}</td>
+          <td></td>
+          <td class="ml-col" style="color:var(--blue);">${(e.totalMl||0).toLocaleString('fr')} m</td>
+          <td></td><td></td>
+        </tr>`);
+      }
+    });
+
+    contentEl.innerHTML=`
+      <div class="card" style="padding:0;overflow:auto;">
+        <table class="synth-table">
+          <thead><tr>
+            <th>Article</th><th>Désignation</th><th>Containers</th>
+            <th>Rang.</th><th>Paq.</th><th>Vrac</th>
+            <th style="text-align:right;">Mètres</th>
+            <th>Date</th><th></th>
+          </tr></thead>
+          <tbody>${allRows.join('')}</tbody>
+          <tfoot><tr class="total-row">
+            <td colspan="6"><strong>TOTAL ${synthActiveProd}</strong></td>
+            <td class="ml-col">${total.toLocaleString('fr')} m</td>
+            <td></td><td></td>
+          </tr></tfoot>
+        </table>
+      </div>`;
+
+  } else {
+    // ── Vue CUMUL : une ligne par famille
+    const familles=[...new Set(sorted.map(e=>{
+      const art=prodArticles.find(a=>a.id===e.articleId)||{};
+      return art.famille||e.famille||'Autre';
+    }))];
+
+    const cumulRows=familles.map(fam=>{
+      const famE=sorted.filter(e=>{
+        const art=prodArticles.find(a=>a.id===e.articleId)||{};
+        return (art.famille||e.famille||'Autre')===fam;
+      });
+      const famTotal=famE.reduce((s,e)=>s+(e.totalMl||0),0);
+      const nbArt=famE.length;
+      const pct=total>0?Math.round(famTotal/total*100):0;
+      return `<tr>
+        <td><strong>${fam}</strong></td>
+        <td style="text-align:center;">${nbArt}</td>
+        <td class="ml-col">${famTotal.toLocaleString('fr')} m</td>
+        <td style="text-align:right;color:var(--gray);font-size:11px;">${pct}%</td>
+      </tr>`;
+    }).join('');
+
+    contentEl.innerHTML=`
+      <div class="card" style="padding:0;overflow:auto;">
+        <table class="synth-table">
+          <thead><tr>
+            <th>Famille</th>
+            <th style="text-align:center;">Nb articles</th>
+            <th style="text-align:right;">Total (m)</th>
+            <th style="text-align:right;">%</th>
+          </tr></thead>
+          <tbody>${cumulRows}</tbody>
+          <tfoot><tr class="total-row">
+            <td colspan="2"><strong>TOTAL ${synthActiveProd}</strong></td>
+            <td class="ml-col">${total.toLocaleString('fr')} m</td>
+            <td></td>
+          </tr></tfoot>
+        </table>
+      </div>`;
+  }
+}
+
+function synthShowProd(prod){
+  synthActiveProd=prod;
+  renderSynthese();
+}
+
+function synthSetView(v){
+  synthView=v;
+  renderSynthese();
+}
+
+function deleteEntry(articleId){
+  // Supprimer dans le produit affiché (synthActiveProd), pas forcément le produit actif en saisie
+  const prod = synthActiveProd || currentProduct;
+  const prodEntries = loadEntries(prod).filter(e=>Number(e.articleId)!==Number(articleId));
+  localStorage.setItem(`${prod.toLowerCase()}_entries`, JSON.stringify(prodEntries));
+  // Si c'est le même produit que currentProduct, mettre à jour entries aussi
+  if(prod===currentProduct) entries=prodEntries;
+  renderSynthese();
+  renderRecent();
+}
+
+function confirmClear(){
+  // Réinitialise le produit AFFICHÉ dans la synthèse (onglet actif), pas le produit de saisie
+  const prod = synthActiveProd || currentProduct;
+  const label = (PRODUCTS[prod] && PRODUCTS[prod].label) || prod;
+  openConfirm(
+    '⚠️ Réinitialiser l\'inventaire',
+    `Toutes les saisies de « ${label} » seront supprimées définitivement. Confirmer ?`,
+    ()=>{
+      localStorage.removeItem(`${prod.toLowerCase()}_entries`);
+      if(prod===currentProduct) entries=[];
+      synthActiveProd=null;
+      renderSynthese();
+      renderRecent();
+      toast(`Inventaire ${label} réinitialisé`);
+    }
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  ÉDITION / SUPPRESSION D'UNE SAISIE individuelle
+// ──────────────────────────────────────────────────────────────────
+function editSaisie(articleId, saisieId){
+  const prod = synthActiveProd || currentProduct;
+  const prodEntries = loadEntries(prod);
+  const e = prodEntries.find(x=>Number(x.articleId)===Number(articleId));
+  if(!e) return;
+  const s = (e.saisies||[]).find(x=>Number(x.id)===Number(saisieId));
+  if(!s) return;
+  const art = loadArticles(prod).find(a=>a.id===Number(articleId))||{};
+
+  document.getElementById('edit-entry-art-id').value    = articleId;
+  document.getElementById('edit-entry-prod').value      = prod;
+  document.getElementById('edit-entry-saisie-id').value = saisieId;
+  document.getElementById('edit-entry-art-name').textContent = `${e.articleId} — ${e.designation}  (${e.famille})`;
+  document.getElementById('ee-mrack').value   = s.mRacks   ||0;
+  document.getElementById('ee-rangees').value = s.nbRangees||0;
+  document.getElementById('ee-paquets').value = s.nbPaquets||0;
+  document.getElementById('ee-vrac').value    = s.nbVrac   ||0;
+  document.getElementById('ee-hint-bpr').textContent = art.barresRangee ? `(×${art.barresRangee} barres×6 m)` : '';
+  document.getElementById('ee-hint-bpp').textContent = art.barresPaquet ? `(×${art.barresPaquet} barres×6 m)` : '';
+  document.getElementById('ee-mrack').dataset.bpr = art.barresRangee||0;
+  document.getElementById('ee-mrack').dataset.bpp = art.barresPaquet||0;
+  recalcEditEntry();
+  document.getElementById('edit-entry-modal').classList.add('open');
+}
+
+function deleteSaisie(articleId, saisieId){
+  const prod = synthActiveProd || currentProduct;
+  openConfirm(
+    'Supprimer cette saisie',
+    `Supprimer définitivement cette ligne pour l'article ${articleId} ?`,
+    ()=>{
+      const prodEntries = loadEntries(prod);
+      const idx = prodEntries.findIndex(e=>Number(e.articleId)===Number(articleId));
+      if(idx<0) return;
+      prodEntries[idx].saisies=(prodEntries[idx].saisies||[]).filter(s=>Number(s.id)!==Number(saisieId));
+      if(prodEntries[idx].saisies.length===0){
+        prodEntries.splice(idx,1); // plus de saisies → supprimer l'article
+      } else {
+        prodEntries[idx].totalMl=prodEntries[idx].saisies.reduce((s,x)=>s+(x.addMl||0),0);
+      }
+      localStorage.setItem(`${prod.toLowerCase()}_entries`,JSON.stringify(prodEntries));
+      if(prod===currentProduct) entries=prodEntries;
+      renderSynthese(); renderRecent();
+      toast('Saisie supprimée','ok');
+    }
+  );
+}
+
+function recalcEditEntry(){
+  const bpr = parseInt(document.getElementById('ee-mrack').dataset.bpr)||0;
+  const bpp = parseInt(document.getElementById('ee-mrack').dataset.bpp)||0;
+  const mRacks  = parseInt(document.getElementById('ee-mrack').value)  ||0;
+  const rangees = parseInt(document.getElementById('ee-rangees').value) ||0;
+  const paquets = parseInt(document.getElementById('ee-paquets').value) ||0;
+  const vrac    = parseInt(document.getElementById('ee-vrac').value)    ||0;
+  const total   = mRacks + rangees*bpr*6 + paquets*bpp*6 + vrac*6;
+  document.getElementById('ee-total').textContent = total.toLocaleString('fr')+' m';
+}
+
+function closeEditEntry(){document.getElementById('edit-entry-modal').classList.remove('open');}
+
+function saveEditEntry(){
+  const articleId = parseInt(document.getElementById('edit-entry-art-id').value);
+  const prod      = document.getElementById('edit-entry-prod').value;
+  const saisieId  = Number(document.getElementById('edit-entry-saisie-id').value);
+  const bpr = parseInt(document.getElementById('ee-mrack').dataset.bpr)||0;
+  const bpp = parseInt(document.getElementById('ee-mrack').dataset.bpp)||0;
+  const mRacks  = parseInt(document.getElementById('ee-mrack').value)  ||0;
+  const rangees = parseInt(document.getElementById('ee-rangees').value) ||0;
+  const paquets = parseInt(document.getElementById('ee-paquets').value) ||0;
+  const vrac    = parseInt(document.getElementById('ee-vrac').value)    ||0;
+  const addMl   = mRacks + rangees*bpr*6 + paquets*bpp*6 + vrac*6;
+
+  const prodEntries = loadEntries(prod);
+  const eIdx = prodEntries.findIndex(e=>Number(e.articleId)===articleId);
+  if(eIdx<0){closeEditEntry();return;}
+  const sIdx = (prodEntries[eIdx].saisies||[]).findIndex(s=>Number(s.id)===saisieId);
+  if(sIdx<0){closeEditEntry();return;}
+
+  prodEntries[eIdx].saisies[sIdx].mRacks    = mRacks;
+  prodEntries[eIdx].saisies[sIdx].nbRangees = rangees;
+  prodEntries[eIdx].saisies[sIdx].nbPaquets = paquets;
+  prodEntries[eIdx].saisies[sIdx].nbVrac    = vrac;
+  prodEntries[eIdx].saisies[sIdx].addMl     = addMl;
+  prodEntries[eIdx].saisies[sIdx].date      = new Date().toISOString();
+  prodEntries[eIdx].totalMl = prodEntries[eIdx].saisies.reduce((s,x)=>s+(x.addMl||0),0);
+  prodEntries[eIdx].date    = new Date().toISOString();
+
+  localStorage.setItem(`${prod.toLowerCase()}_entries`,JSON.stringify(prodEntries));
+  if(prod===currentProduct) entries=prodEntries;
+
+  closeEditEntry(); renderSynthese(); renderRecent();
+  toast(`Saisie corrigée → ${addMl.toLocaleString('fr')} m`,'ok');
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  EXPORT EXCEL
+// ──────────────────────────────────────────────────────────────────
+//  EXPORT CSV (aucune librairie externe, compatible PC + mobile)
+// ──────────────────────────────────────────────────────────────────
+function exportExcel(){
+  if(!entries.length){toast('Aucune donnée à exporter','err');return;}
+
+  const now=new Date();
+  const date=now.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const hhmm=now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}).replace(':','h');
+  const sep=';';
+
+  const headers=['TYPE INTERCALAIRE','Article','Désignation',
+    'Nb racks','m/rack','m racks',
+    'Barres/rangée','Nb rangées',
+    'Barres/paquet','Nb paquets',
+    'Nb barres vrac','Total (m)'];
+
+  const familles=[...new Set(entries.map(e=>{
+    const a=articles.find(x=>x.id===e.articleId);
+    return a?a.famille:'Autre';
+  }))];
+
+  const rows=[];
+  for(const fam of familles){
+    const famEntries=entries.filter(e=>{
+      const a=articles.find(x=>x.id===e.articleId);
+      return (a?a.famille:'Autre')===fam;
+    }).sort((a,b)=>a.articleId-b.articleId);
+
+    famEntries.forEach((e,i)=>{
+      const a=articles.find(x=>x.id===e.articleId)||{};
+      // Agréger toutes les saisies de l'article (les champs sont dans e.saisies[], pas sur e)
+      const saisies=e.saisies||[];
+      const nbRacks   = saisies.reduce((s,x)=>s+(x.nbRacks||0),0);
+      const mRacks    = saisies.reduce((s,x)=>s+(x.mRacks||0),0);
+      const nbRangees = saisies.reduce((s,x)=>s+(x.nbRangees||0),0);
+      const nbPaquets = saisies.reduce((s,x)=>s+(x.nbPaquets||0),0);
+      const nbVrac    = saisies.reduce((s,x)=>s+(x.nbVrac||0),0);
+      const mParRack  = nbRacks>0 ? Math.round(mRacks/nbRacks) : 0;
+      rows.push([
+        i===0?fam:'',
+        e.articleId,
+        e.designation,
+        nbRacks,
+        mParRack,
+        mRacks,
+        a.barresRangee||'',
+        nbRangees,
+        a.barresPaquet||'',
+        nbPaquets,
+        nbVrac,
+        e.totalMl
+      ]);
+    });
+  }
+
+  const csvContent=[headers,...rows]
+    .map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(sep))
+    .join('\r\n');
+
+  // BOM UTF-8 pour Excel français
+  const filename=`Inventaire_${currentProduct}_${date.replace(/\//g,'-')}_${hhmm}.csv`;
+  const blob=new Blob(['﻿'+csvContent],{type:'text/csv;charset=utf-8'});
+
+  // Téléchargement classique (fallback universel)
+  function dlCsv(){
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},300);
+    toast('📊 CSV téléchargé','ok');
+  }
+
+  // Web Share API (mobile) — sinon téléchargement
+  const file=new File([blob],filename,{type:'text/csv;charset=utf-8'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    navigator.share({
+      title:`Inventaire ${currentProduct} — Calorifloat`,
+      text:`Inventaire ${currentProduct} du ${date}`,
+      files:[file]
+    })
+    .then(()=>toast('📤 Rapport partagé','ok'))
+    .catch(e=>{
+      if(e.name==='AbortError') return; // annulé par l'utilisateur, rien à faire
+      dlCsv(); // le partage a échoué → on télécharge
+    });
+  } else {
+    dlCsv();
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  PARAMÈTRES
+// ──────────────────────────────────────────────────────────────────
+function renderParams(){
+  const el=document.getElementById('params-list');
+  const familles=[...new Set(articles.map(a=>a.famille))];
+  el.innerHTML=familles.map(fam=>{
+    const famArts=articles.filter(a=>a.famille===fam);
+    return `<div class="card" style="margin-bottom:10px;">
+      <div class="card-title">${fam}</div>
+      ${famArts.map(a=>`
+        <div class="art-row">
+          <div>
+            <div><span class="art-id">${a.id}</span> <span class="art-name">${a.designation}</span></div>
+            <div class="art-params">
+              Rang: ${a.barresRangee??'—'} &nbsp;|&nbsp;
+              Paq: ${a.barresPaquet??'—'}
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-sm btn-outline" onclick="openEditModal(${a.id})">✏️</button>
+            <button class="btn btn-sm" style="background:var(--red2);color:var(--red);border:none;" onclick="deleteArticle(${a.id})">🗑</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
+  }).join('');
+}
+
+function resetArticles(){
+  openConfirm(
+    '⟳ Réinitialiser les articles',
+    'Remettre tous les paramètres aux valeurs d\'origine ?',
+    ()=>{articles=[...PRODUCTS[currentProduct].defaultArticles];saveArticles(articles);renderParams();renderEtiquettes();toast('Articles réinitialisés');}
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  MODAL ÉDITION ARTICLE
+// ──────────────────────────────────────────────────────────────────
+function openEditModal(id){
+  const isNew=(id===null||id===undefined);
+  document.getElementById('edit-modal-title').textContent=isNew?'Nouvel article':'Modifier l\'article';
+  document.getElementById('edit-modal-id').textContent=isNew?'':id;
+  document.getElementById('edit-id-group').style.display=isNew?'block':'none';
+  document.getElementById('edit-art-id-new').value='';
+
+  if(isNew){
+    document.getElementById('edit-art-id').value='';
+    document.getElementById('edit-designation').value='';
+    document.getElementById('edit-famille').value='';
+    document.getElementById('edit-type').value='M';
+    document.getElementById('edit-bpr').value='';
+    document.getElementById('edit-bpp').value='';
+  } else {
+    const a=articles.find(x=>x.id===id);
+    if(!a) return;
+    document.getElementById('edit-art-id').value=id;
+    document.getElementById('edit-designation').value=a.designation;
+    document.getElementById('edit-famille').value=a.famille;
+    document.getElementById('edit-type').value=a.typeContainer;
+    document.getElementById('edit-bpr').value=a.barresRangee??'';
+    document.getElementById('edit-bpp').value=a.barresPaquet??'';
+  }
+  document.getElementById('edit-modal').classList.add('open');
+}
+function closeEditModal(){document.getElementById('edit-modal').classList.remove('open');}
+
+function saveArticle(){
+  const isNew=document.getElementById('edit-id-group').style.display!=='none';
+  const designation=document.getElementById('edit-designation').value.trim();
+  const famille=document.getElementById('edit-famille').value.trim();
+  const typeContainer=document.getElementById('edit-type').value.trim().toUpperCase()||'M';
+  const barresRangee=document.getElementById('edit-bpr').value?parseInt(document.getElementById('edit-bpr').value):null;
+  const barresPaquet=document.getElementById('edit-bpp').value?parseInt(document.getElementById('edit-bpp').value):null;
+
+  if(!designation){toast('Désignation obligatoire','err');return;}
+  if(!famille){toast('Famille obligatoire','err');return;}
+
+  if(isNew){
+    const newId=parseInt(document.getElementById('edit-art-id-new').value);
+    if(!newId||isNaN(newId)){toast('N° article obligatoire','err');return;}
+    if(articles.find(a=>a.id===newId)){toast('Ce N° article existe déjà','err');return;}
+    articles.push({id:newId,designation,famille,couleur:'gris',typeContainer,qtyContainer:0,barresRangee,barresPaquet});
+    articles.sort((a,b)=>a.id-b.id);
+    saveArticles(articles);
+    closeEditModal();
+    renderParams();
+    renderEtiquettes();
+    toast(`Article ${newId} ajouté`,'ok');
+  } else {
+    const id=parseInt(document.getElementById('edit-art-id').value);
+    const idx=articles.findIndex(a=>a.id===id);
+    if(idx<0) return;
+    articles[idx]={...articles[idx],designation,famille,typeContainer,barresRangee,barresPaquet};
+    saveArticles(articles);
+    closeEditModal();
+    renderParams();
+    toast(`Article ${id} mis à jour`,'ok');
+  }
+}
+
+function deleteArticle(id){
+  openConfirm(
+    `Supprimer l'article ${id}`,
+    `Supprimer définitivement l'article ${id} et ses saisies d'inventaire ?`,
+    ()=>{
+      articles=articles.filter(a=>a.id!==id);
+      entries=entries.filter(e=>e.articleId!==id);
+      saveArticles(articles);
+      saveEntries(entries);
+      renderParams();
+      renderEtiquettes();
+      renderRecent();
+      toast(`Article ${id} supprimé`,'ok');
+    }
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  ÉTIQUETTES QR
+// ──────────────────────────────────────────────────────────────────
+function renderEtiquettes(){
+  // Remplir le select article
+  const sel=document.getElementById('etiq-article-select');
+  const cur=sel.value;
+  const familles=[...new Set(articles.map(a=>a.famille))];
+  let opts='<option value="">— Sélectionner un article —</option>';
+  for(const fam of familles){
+    opts+=`<optgroup label="${fam}">`;
+    opts+=articles.filter(a=>a.famille===fam)
+      .map(a=>`<option value="${a.id}">${a.id} — ${a.designation}</option>`).join('');
+    opts+=`</optgroup>`;
+  }
+  sel.innerHTML=opts;
+  if(cur) sel.value=cur;
+}
+
+// Génère un QR code via Canvas (synchrone, 100% local, fonctionne à l'impression)
+// ──────────────────────────────────────────────────────────────────
+//  QR CODE — implémentation inline (mode numérique, EC=M, v1-10)
+//  Aucune dépendance CDN
+// ──────────────────────────────────────────────────────────────────
+function makeQRDataURL(text, size=88){
+  try{
+    const s=String(text);
+    // GF(256) avec polynôme primitif 285
+    const EXP=new Array(512),LOG=new Array(256);
+    for(let v=1,i=0;i<255;i++){EXP[i]=v;LOG[v]=i;v=v<128?v*2:(v*2)^285;}
+    for(let i=255;i<512;i++)EXP[i]=EXP[i-255];
+    const gm=(a,b)=>a&&b?EXP[LOG[a]+LOG[b]]:0;
+
+    // Polynôme générateur RS de degré n
+    function rsGen(n){
+      let g=[1];
+      for(let i=0;i<n;i++){const r=new Array(g.length+1).fill(0);for(let j=0;j<g.length;j++){r[j]^=g[j];r[j+1]^=gm(g[j],EXP[i]);}g=r;}
+      return g;
+    }
+    // Calcul des EC codewords
+    function rsEc(data,n){
+      const gen=rsGen(n),m=[...data,...new Array(n).fill(0)];
+      for(let i=0;i<data.length;i++){const c=m[i];if(c)for(let j=0;j<gen.length;j++)m[i+j]^=gm(gen[j],c);}
+      return m.slice(data.length);
+    }
+
+    // Capacité numérique/EC-M par version
+    const NCAP=[,20,38,55,70,95,118,134,158,182,211];
+    const VCAP=[,[16,10,1],[28,16,1],[44,26,1],[64,18,2],[86,24,2],[108,16,4],[124,18,4],[154,22,4],[182,22,5],[216,26,5]];
+    let ver=1; for(;ver<=10&&NCAP[ver]<s.length;ver++);
+    const [dc,ec,nb]=VCAP[ver];
+
+    // Encodage numérique → bits
+    const bits=[];
+    const pb=(v,n)=>{for(let i=n-1;i>=0;i--)bits.push((v>>i)&1);};
+    pb(1,4); pb(s.length,ver<=9?10:12);
+    for(let i=0;i<s.length;i+=3){
+      const c=s.slice(i,i+3);
+      if(c.length===3)pb(+c,10); else if(c.length===2)pb(+c,7); else pb(+c,4);
+    }
+    for(let i=0;i<4&&bits.length<dc*8;i++)bits.push(0);
+    while(bits.length%8)bits.push(0);
+    for(let pi=0;bits.length<dc*8;pi++){const p=pi%2?0x11:0xEC;for(let i=7;i>=0;i--)bits.push((p>>i)&1);}
+    const cw=[];
+    for(let i=0;i<bits.length;i+=8){let b=0;for(let j=0;j<8;j++)b=(b<<1)|bits[i+j];cw.push(b);}
+
+    // Blocs de données + RS
+    const sl=Math.floor(dc/nb),lb=dc%nb;
+    const dblk=[],eblk=[];
+    for(let i=0,idx=0;i<nb;i++){const l=i<nb-lb?sl:sl+1;dblk.push(cw.slice(idx,idx+=l));}
+    dblk.forEach(b=>eblk.push(rsEc(b,ec)));
+    const data=[];
+    const ml=Math.max(...dblk.map(b=>b.length));
+    for(let i=0;i<ml;i++)dblk.forEach(b=>{if(i<b.length)data.push(b[i]);});
+    for(let i=0;i<ec;i++)eblk.forEach(b=>data.push(b[i]));
+
+    // Matrice n×n + masque des modules de fonction (ne pas masquer les finder/timing/etc.)
+    const n=ver*4+17;
+    const m=Array.from({length:n},()=>new Array(n).fill(-1));
+    const fx=Array.from({length:n},()=>new Array(n).fill(false)); // fx=true → module fixe, pas de masquage
+
+    function setFx(r,c,v){m[r][c]=v;fx[r][c]=true;}
+
+    // Finder + séparateur
+    function finder(tr,tc){
+      for(let r=0;r<=6;r++)for(let c=0;c<=6;c++)
+        setFx(tr+r,tc+c,(r===0||r===6||c===0||c===6||(r>=2&&r<=4&&c>=2&&c<=4))?1:0);
+      for(let i=-1;i<=7;i++){
+        if(tr+i>=0&&tr+i<n){if(tc-1>=0)setFx(tr+i,tc-1,0);if(tc+7<n)setFx(tr+i,tc+7,0);}
+        if(tc+i>=0&&tc+i<n){if(tr-1>=0)setFx(tr-1,tc+i,0);if(tr+7<n)setFx(tr+7,tc+i,0);}
+      }
+    }
+    finder(0,0); finder(0,n-7); finder(n-7,0);
+
+    // Timing
+    for(let i=8;i<n-8;i++){setFx(6,i,i%2?0:1);setFx(i,6,i%2?0:1);}
+
+    // Alignment (v≥2)
+    const AP=[,[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50]];
+    for(const ar of AP[ver])for(const ac of AP[ver]){
+      if(fx[ar][ac])continue;
+      for(let dr=-2;dr<=2;dr++)for(let dc=-2;dc<=2;dc++)
+        setFx(ar+dr,ac+dc,(Math.abs(dr)===2||Math.abs(dc)===2||(!dr&&!dc))?1:0);
+    }
+
+    // Réserver zones format (-2) et module sombre — tous marqués fixes
+    for(let i=0;i<9;i++){if(!fx[8][i]){m[8][i]=-2;fx[8][i]=true;}if(!fx[i][8]){m[i][8]=-2;fx[i][8]=true;}}
+    for(let i=n-8;i<n;i++){if(!fx[8][i]){m[8][i]=-2;fx[8][i]=true;}}
+    for(let i=n-7;i<n;i++){if(!fx[i][8]){m[i][8]=-2;fx[i][8]=true;}}
+    setFx(n-8,8,1); // module sombre fixe
+
+    // Placement données (zigzag) — uniquement dans les cellules libres (-1)
+    const allBits=[];data.forEach(b=>{for(let i=7;i>=0;i--)allBits.push((b>>i)&1);});
+    let bi=0,up=true;
+    for(let right=n-1;right>=1;right-=2){
+      if(right===6)right=5;
+      for(let row=0;row<n;row++){
+        const r=up?n-1-row:row;
+        for(let dc=0;dc<2;dc++){const c=right-dc;if(m[r][c]===-1)m[r][c]=bi<allBits.length?allBits[bi++]:0;}
+      }
+      up=!up;
+    }
+
+    // Masquage — UNIQUEMENT sur les modules de données (fx=false)
+    const MF=[(r,c)=>(r+c)%2===0,(r,c)=>r%2===0,(r,c)=>c%3===0,(r,c)=>(r+c)%3===0,
+      (r,c)=>(Math.floor(r/2)+Math.floor(c/3))%2===0,(r,c)=>(r*c)%2+(r*c)%3===0,
+      (r,c)=>((r*c)%2+(r*c)%3)%2===0,(r,c)=>((r+c)%2+(r*c)%3)%2===0];
+    function penalty(mat){
+      let p=0;
+      for(let r=0;r<n;r++){let run=1;for(let c=1;c<n;c++){if((mat[r][c]>0)===(mat[r][c-1]>0))run++;else{if(run>=5)p+=run-2;run=1;}}if(run>=5)p+=run-2;}
+      for(let c=0;c<n;c++){let run=1;for(let r=1;r<n;r++){if((mat[r][c]>0)===(mat[r-1][c]>0))run++;else{if(run>=5)p+=run-2;run=1;}}if(run>=5)p+=run-2;}
+      for(let r=0;r<n-1;r++)for(let c=0;c<n-1;c++){const v=mat[r][c]>0;if(v===(mat[r+1][c]>0)&&v===(mat[r][c+1]>0)&&v===(mat[r+1][c+1]>0))p+=3;}
+      let dk=0;for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(mat[r][c]>0)dk++;
+      p+=Math.abs(Math.ceil(dk*20/(n*n))-10)*10;
+      return p;
+    }
+    const FMT=[0x5412,0x5125,0x5E7C,0x5B4B,0x45F9,0x40CE,0x4F97,0x4AA0];
+    let bestP=Infinity,bestMk=0;
+    for(let mk=0;mk<8;mk++){
+      const tm=m.map(r=>r.slice());const fn=MF[mk];
+      // Masque uniquement les données (fx=false), pas les modules de fonction
+      for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(!fx[r][c]&&(tm[r][c]===0||tm[r][c]===1))tm[r][c]^=fn(r,c)?1:0;
+      const p=penalty(tm);if(p<bestP){bestP=p;bestMk=mk;}
+    }
+    const fn=MF[bestMk];
+    for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(!fx[r][c]&&(m[r][c]===0||m[r][c]===1))m[r][c]^=fn(r,c)?1:0;
+
+    // Écrire l'info de format (15 bits) — écrase les zones réservées -2
+    const d=FMT[bestMk];
+    for(let i=0;i<6;i++)m[i][8]=(d>>i)&1;
+    m[7][8]=(d>>6)&1; m[8][8]=(d>>7)&1;
+    for(let i=8;i<15;i++)m[n-15+i][8]=(d>>i)&1;
+    for(let i=0;i<8;i++)m[8][n-1-i]=(d>>i)&1;
+    m[8][7]=(d>>8)&1;
+    for(let i=9;i<15;i++)m[8][15-i-1]=(d>>i)&1;
+
+    // Rendu canvas avec quiet zone (4 modules requis par la norme QR)
+    const canvas=document.createElement('canvas');
+    canvas.width=canvas.height=size;
+    const ctx=canvas.getContext('2d');
+    const QUIET=4; // 4 modules blancs sur chaque côté
+    const cell=size/(n+2*QUIET);
+    const off=QUIET*cell;
+    ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,size,size);
+    ctx.fillStyle='#1a3c6e';
+    for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(m[r][c]>0)ctx.fillRect(off+c*cell,off+r*cell,cell,cell);
+    return canvas.toDataURL('image/png');
+  }catch(e){console.error('QR:',e);return null;}
+}
+
+// Crée une étiquette
+function makeLabel(art){
+  const div=document.createElement('div');
+  div.className='etiq-card';
+
+  const dataUrl=makeQRDataURL(art.id);
+  if(dataUrl){
+    const img=new Image(80,80);
+    img.src=dataUrl;
+    div.appendChild(img);
+  } else {
+    const fb=document.createElement('div');
+    fb.className='etiq-fallback';
+    fb.textContent=art.id;
+    div.appendChild(fb);
+  }
+
+  const idEl=document.createElement('div');
+  idEl.className='etiq-id';
+  idEl.textContent=art.id;
+  div.appendChild(idEl);
+
+  const nameEl=document.createElement('div');
+  nameEl.className='etiq-name';
+  nameEl.textContent=art.designation;
+  nameEl.appendChild(document.createElement('br'));
+  const sub=document.createElement('span');
+  sub.style.color='#aaa';
+  sub.textContent=art.famille.replace('TGI ','');
+  nameEl.appendChild(sub);
+  div.appendChild(nameEl);
+
+  return div;
+}
+
+// Ajoute N étiquettes au plateau (SANS effacer les précédentes)
+function generateEtiq(){
+  const id=parseInt(document.getElementById('etiq-article-select').value);
+  if(!id||isNaN(id)){toast('Sélectionne un article','err');return;}
+  const n=Math.min(Math.max(parseInt(document.getElementById('etiq-count').value)||1,1),100);
+  const art=articles.find(a=>a.id===id);
+  if(!art) return;
+
+  const grid=document.getElementById('etiq-grid');
+  for(let i=0;i<n;i++){
+    grid.appendChild(makeLabel(art));
+  }
+
+  const total=grid.children.length;
+  document.getElementById('etiq-empty').style.display='none';
+  document.getElementById('etiq-print-bar').style.display='block';
+  document.getElementById('etiq-info-bar').textContent=
+    `${total} étiquette${total>1?'s':''} au total (+${n} ${art.designation})`;
+  toast(`+${n} étiquette${n>1?'s':''} ${art.designation} ajoutée${n>1?'s':''}`, 'ok');
+}
+
+// Partager les étiquettes comme fichier HTML imprimable
+function partagerEtiquettes(){
+  const grid=document.getElementById('etiq-grid');
+  if(!grid.children.length){toast('Aucune étiquette à envoyer','err');return;}
+
+  // Capturer les cartes (QR codes déjà en base64)
+  const cardsHtml=grid.innerHTML;
+  const date=new Date().toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+
+  const html=`<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8">
+<title>Étiquettes TGI — Calorifloat</title>
+<style>
+body{font-family:Arial,sans-serif;margin:8mm;background:#fff;}
+h2{font-size:13px;color:#1a3c6e;margin-bottom:6mm;}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5mm;}
+.etiq-card{border:1px solid #bbb;border-radius:4px;padding:5px;text-align:center;break-inside:avoid;}
+.etiq-card img{display:block;margin:0 auto;width:72px;height:72px;}
+.etiq-id{font-size:11px;font-weight:800;color:#1a3c6e;margin-top:4px;}
+.etiq-name{font-size:9px;color:#666;margin-top:2px;line-height:1.3;}
+@media print{body{margin:4mm;}h2{display:none;}}
+</style></head>
+<body>
+<h2>Étiquettes TGI — Calorifloat — ${date} — Ouvrir dans le navigateur puis Ctrl+P</h2>
+<div class="grid">${cardsHtml}</div>
+</body></html>`;
+
+  const filename=`Etiquettes_TGI_${date.replace(/\//g,'-')}.html`;
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const file=new File([blob],filename,{type:'text/html'});
+
+  function dlHtml(){
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},300);
+    toast('📄 Fichier téléchargé','ok');
+  }
+
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    navigator.share({title:'Étiquettes TGI',files:[file]})
+    .then(()=>toast('📤 Étiquettes envoyées','ok'))
+    .catch(e=>{if(e.name==='AbortError')return; dlHtml();});
+  } else {
+    dlHtml();
+  }
+}
+
+// Vider tout le plateau
+function clearEtiq(){
+  const grid=document.getElementById('etiq-grid');
+  if(typeof grid.replaceChildren==='function') grid.replaceChildren();
+  else while(grid.firstChild) grid.removeChild(grid.firstChild);
+  document.getElementById('etiq-empty').style.display='block';
+  document.getElementById('etiq-print-bar').style.display='none';
+  toast('Plateau vidé');
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  KANBAN
+// ──────────────────────────────────────────────────────────────────
+function parseDesig(d){const m=d.match(/^(\d+)(.*)$/);return m?{num:m[1],suf:m[2]}:{num:d,suf:''};}
+function shortFam(f){return f.replace(/\s+\d+$/,'');}
+function getRal(f){const m=f.match(/(\d+)$/);return m?m[1]:'';}
+
+const STRIP_COLORS={
+  // TGI — bande couleur droite
+  gris:     '#9DA8A0',
+  noir:     '#1A1A1A',
+  blanc:    '#E8E8E8',
+  drome:    '#CDD1CC',
+  marron:   '#7E4B26',
+  // SW — bande couleur = couleur réelle de l'espaceur (RAL)
+  sw_9023:  '#7E8282',  // RAL 9023 Gris perle foncé (Titan)
+  sw_noir:  '#0A0A0A',  // RAL 9005 Noir intense
+  sw_7035:  '#CBD0CC',  // RAL 7035 Gris clair
+  sw_eq_b:  '#1A1A1A',  // Équerres butylées → noir (butyl)
+  sw_eq_nb: '#C0C0C0',  // Équerres non butylées → gris argenté
+  // ALU — bande couleur = couleur réelle de l'espaceur
+  alu_nat:  '#B8B8B8',  // aluminium naturel (argent)
+  alu_noir: '#1A1A1A',  // aluminium noir
+  alu_blanc:'#E8E8E8',  // aluminium blanc
+  alu_dore: '#C8A84B',  // aluminium doré
+};
+
+// Couleur de fond du kanban selon le produit courant
+const KANBAN_BG={
+  TGI:'#FFE600',  // jaune TGI
+  SW: '#F5B8D8',  // rose clair SW
+  ALU:'#C8DCF0',  // bleu clair ALU (couleur étiquettes rayonnage)
+};
+
+function renderKanban(){
+  const sel=document.getElementById('kanban-article-select');
+  const cur=sel.value;
+  const familles=[...new Set(articles.map(a=>a.famille))];
+  let opts='<option value="">— Sélectionner un article —</option>';
+  for(const fam of familles){
+    opts+=`<optgroup label="${fam}">`;
+    opts+=articles.filter(a=>a.famille===fam)
+      .map(a=>`<option value="${a.id}">${a.id} — ${a.designation}</option>`).join('');
+    opts+=`</optgroup>`;
+  }
+  sel.innerHTML=opts;
+  if(cur) sel.value=cur;
+}
+
+function makeKanbanCard(art){
+  const {num,suf}=parseDesig(art.designation);
+  const fam=shortFam(art.famille);
+  const ral=getRal(art.famille);
+  const stripColor=STRIP_COLORS[art.couleur]||'#ccc';
+
+  const card=document.createElement('div');
+  card.className='kanban-card';
+
+  // Zone principale — couleur selon le produit
+  const main=document.createElement('div');
+  main.className='kanban-main';
+  main.style.background=KANBAN_BG[currentProduct]||'#FFE600';
+
+  // Texte
+  const tz=document.createElement('div');
+  tz.className='kanban-text-zone';
+  const l1=document.createElement('div');
+  l1.className='kanban-line1';
+  l1.textContent=`${num} (${suf}) ${fam}`;
+  const l2=document.createElement('div');
+  l2.className='kanban-line2';
+  l2.textContent=`${ral?'RAL '+ral+'  —  ':''}Art. ${art.id}`;
+  tz.append(l1,l2);
+  main.appendChild(tz);
+  card.appendChild(main);
+
+  // Zone QR — fond blanc
+  const qrZone=document.createElement('div');
+  qrZone.className='kanban-qr-zone';
+  const dataUrl=makeQRDataURL(art.id);
+  if(dataUrl){
+    const img=new Image(88,88);
+    img.src=dataUrl;
+    img.className='kanban-qr-img';
+    qrZone.appendChild(img);
+  } else {
+    const fb=document.createElement('div');
+    fb.style.cssText='font-size:10px;font-weight:800;color:#c00;text-align:center;padding:4px;';
+    fb.textContent='QR KO '+art.id;
+    qrZone.appendChild(fb);
+  }
+  card.appendChild(qrZone);
+
+  // Bande couleur droite
+  const strip=document.createElement('div');
+  strip.className='kanban-color-strip';
+  strip.style.background=stripColor;
+  card.appendChild(strip);
+
+  return card;
+}
+
+function generateKanban(){
+  const id=parseInt(document.getElementById('kanban-article-select').value);
+  if(!id||isNaN(id)){toast('Sélectionne un article','err');return;}
+  const n=Math.min(Math.max(parseInt(document.getElementById('kanban-count').value)||1,1),50);
+  const art=articles.find(a=>a.id===id);
+  if(!art) return;
+  const list=document.getElementById('kanban-list');
+  for(let i=0;i<n;i++) list.appendChild(makeKanbanCard(art));
+  const total=list.children.length;
+  document.getElementById('kanban-empty').style.display='none';
+  document.getElementById('kanban-print-bar').style.display='block';
+  document.getElementById('kanban-info-bar').textContent=`${total} kanban${total>1?'s':''} (+${n} ${art.designation})`;
+  toast(`+${n} kanban${n>1?'s':''} ${art.designation}`,'ok');
+}
+
+function clearKanban(){
+  const list=document.getElementById('kanban-list');
+  if(typeof list.replaceChildren==='function') list.replaceChildren();
+  else while(list.firstChild) list.removeChild(list.firstChild);
+  document.getElementById('kanban-empty').style.display='block';
+  document.getElementById('kanban-print-bar').style.display='none';
+  toast('Plateau vidé');
+}
+
+function partagerKanban(){
+  const list=document.getElementById('kanban-list');
+  if(!list.children.length){toast('Aucun kanban à envoyer','err');return;}
+  const date=new Date().toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const bg=KANBAN_BG[currentProduct]||'#FFE600';
+  const html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+<title>Kanbans ${currentProduct} — Calorifloat</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:Arial,sans-serif;margin:5mm;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+.kanban-list{display:flex;flex-direction:column;gap:2mm;}
+.kanban-card{display:flex;align-items:stretch;width:180mm;height:28mm;border:1px solid #888;break-inside:avoid;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+.kanban-main{background:${bg};flex:1;display:flex;align-items:center;padding:2mm 3mm;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+.kanban-text-zone{flex:1;min-width:0;}
+.kanban-line1{font-size:28pt;font-weight:900;color:#000;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.kanban-line2{font-size:9pt;font-weight:700;color:#333;margin-top:1mm;}
+.kanban-qr-zone{background:#fff;width:28mm;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:1mm;border-right:1.5px solid #444;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+.kanban-qr-img{width:24mm;height:24mm;display:block;}
+.kanban-color-strip{width:30mm;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style></head><body>
+<div class="kanban-list">${list.innerHTML}</div>
+</body></html>`;
+  const filename=`Kanbans_TGI_${date.replace(/\//g,'-')}.html`;
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const file=new File([blob],filename,{type:'text/html'});
+  function dl(){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},300);toast('📄 Fichier téléchargé','ok');}
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    navigator.share({title:'Kanbans TGI',files:[file]}).then(()=>toast('📤 Kanbans envoyés','ok')).catch(e=>{if(e.name==='AbortError')return;dl();});
+  } else { dl(); }
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  QR SCANNER (nécessite HTTPS ou localhost pour la caméra)
+// ──────────────────────────────────────────────────────────────────
+function openScanner(){
+  if(typeof Html5Qrcode==='undefined'){
+    // Charger la lib à la demande
+    const s=document.createElement('script');
+    s.src='https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+    s.onload=()=>startScanner();
+    s.onerror=()=>toast('Scanner non disponible (HTTPS requis)','err');
+    document.head.appendChild(s);
+    return;
+  }
+  startScanner();
+}
+
+function startScanner(){
+  document.getElementById('scanner-modal').classList.add('open');
+  document.getElementById('qr-reader').innerHTML='';
+  html5QrCode=new Html5Qrcode('qr-reader');
+  html5QrCode.start(
+    {facingMode:'environment'},
+    {fps:10,qrbox:{width:200,height:200}},
+    (decoded)=>{
+      const id=parseInt(decoded);
+      // Chercher dans le produit actif d'abord
+      if(articles.find(a=>a.id===id)){
+        closeScanner();
+        selectArticle(id);
+        return;
+      }
+      // Chercher dans les autres produits
+      let foundProd=null;
+      for(const prod of Object.keys(PRODUCTS)){
+        if(prod===currentProduct) continue;
+        if(loadArticles(prod).find(a=>a.id===id)){foundProd=prod;break;}
+      }
+      if(foundProd){
+        closeScanner();
+        switchProduct(foundProd);
+        // Petit délai pour laisser le switch s'effectuer
+        setTimeout(()=>selectArticle(id),100);
+      } else {
+        document.getElementById('qr-status').textContent=`Code "${decoded}" non reconnu — réessayez.`;
+      }
+    },
+    ()=>{}
+  ).catch(err=>{
+    document.getElementById('qr-status').textContent='Caméra inaccessible — vérifiez les permissions.';
+  });
+}
+
+function closeScanner(){
+  document.getElementById('scanner-modal').classList.remove('open');
+  if(html5QrCode){html5QrCode.stop().catch(()=>{});html5QrCode=null;}
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  CONFIRM MODAL
+// ──────────────────────────────────────────────────────────────────
+let confirmCallback=null;
+function openConfirm(title,msg,cb){
+  document.getElementById('confirm-title').textContent=title;
+  document.getElementById('confirm-msg').textContent=msg;
+  confirmCallback=cb;
+  document.getElementById('confirm-modal').classList.add('open');
+}
+function closeConfirm(){document.getElementById('confirm-modal').classList.remove('open');confirmCallback=null;}
+document.getElementById('confirm-ok-btn').onclick=()=>{if(confirmCallback)confirmCallback();closeConfirm();};
+
+// ──────────────────────────────────────────────────────────────────
+//  TOAST
+// ──────────────────────────────────────────────────────────────────
+let toastTimer=null;
+function toast(msg,type=''){
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.className='show '+(type==='ok'?'ok':type==='err'?'err':'');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{el.className='';},2800);
+}
+</script>
+</body>
+</html>
